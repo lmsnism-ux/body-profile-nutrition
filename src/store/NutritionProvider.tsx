@@ -63,6 +63,7 @@ const defaultGroceries: GroceryItem[] = [
 
 const NutritionContext = createContext<NutritionContextValue | null>(null);
 const storageKey = "bp-nutrition-mvp-v2";
+const clampWeight = (value: number) => Math.min(90, Math.max(75, value));
 
 type StoredNutritionState = {
   foods: FoodItem[];
@@ -225,7 +226,7 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
       setSelectedDate(date);
       setLogsByDate((current) => current[date] ? current : { ...current, [date]: createEmptyLog(date, findLatestWeight(current, date)) });
     },
-    setWeight: (weightKg) => updateSelectedLog((current) => ({ ...current, weightKg })),
+    setWeight: (weightKg) => updateSelectedLog((current) => ({ ...current, weightKg: clampWeight(weightKg) })),
     updateTarget: (dayType, key, value) =>
       setNutritionTargets((current) => ({
         ...current,
