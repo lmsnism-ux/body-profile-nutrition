@@ -24,6 +24,10 @@ type FoodForm = {
   sodium: number;
 };
 
+type QuickFood = FoodItem & {
+  tags: string[];
+};
+
 const units: Unit[] = ["g", "ml", "개", "팩", "회", "줌"];
 
 const nutrientLabels: Record<NutrientKey, { label: string; unit: string; accent: string; limit?: boolean }> = {
@@ -56,6 +60,75 @@ const emptyFoodForm: FoodForm = {
   sugar: 0,
   sodium: 0,
 };
+
+const quickFoods: QuickFood[] = [
+  {
+    id: "quick-salmon",
+    name: "연어",
+    emoji: "🐟",
+    baseAmount: 100,
+    unit: "g",
+    nutrients: { calories: 208, carbs: 0, protein: 20, fat: 13, sugar: 0, sodium: 59 },
+    category: "단백질",
+    favorite: true,
+    tags: ["생선", "오메가", "지방"],
+  },
+  {
+    id: "quick-sweet-potato",
+    name: "고구마",
+    emoji: "🍠",
+    baseAmount: 100,
+    unit: "g",
+    nutrients: { calories: 128, carbs: 30, protein: 1.4, fat: 0.2, sugar: 4.2, sodium: 9, fiber: 3 },
+    category: "탄수화물",
+    favorite: true,
+    tags: ["탄수", "간식", "운동전"],
+  },
+  {
+    id: "quick-shrimp",
+    name: "새우",
+    emoji: "🦐",
+    baseAmount: 100,
+    unit: "g",
+    nutrients: { calories: 99, carbs: 0.2, protein: 24, fat: 0.3, sugar: 0, sodium: 111 },
+    category: "단백질",
+    favorite: true,
+    tags: ["해산물", "저지방"],
+  },
+  {
+    id: "quick-broccoli",
+    name: "브로콜리",
+    emoji: "🥦",
+    baseAmount: 100,
+    unit: "g",
+    nutrients: { calories: 34, carbs: 6.6, protein: 2.8, fat: 0.4, sugar: 1.7, sodium: 33, fiber: 2.6 },
+    category: "채소",
+    favorite: true,
+    tags: ["채소", "식이섬유"],
+  },
+  {
+    id: "quick-almond-milk",
+    name: "아몬드브리즈",
+    emoji: "🥛",
+    baseAmount: 190,
+    unit: "ml",
+    nutrients: { calories: 45, carbs: 5, protein: 1, fat: 2.5, sugar: 0.5, sodium: 150 },
+    category: "음료",
+    favorite: true,
+    tags: ["음료", "저칼로리"],
+  },
+  {
+    id: "quick-oatmeal",
+    name: "오트밀",
+    emoji: "🥣",
+    baseAmount: 40,
+    unit: "g",
+    nutrients: { calories: 150, carbs: 27, protein: 5, fat: 3, sugar: 0.5, sodium: 2, fiber: 4 },
+    category: "탄수화물",
+    favorite: true,
+    tags: ["아침", "탄수"],
+  },
+];
 
 function App() {
   return (
@@ -459,10 +532,16 @@ function FoodsView() {
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<FoodForm>(emptyFoodForm);
   const [editingFoodId, setEditingFoodId] = useState<string | null>(null);
+  const [showAdvancedForm, setShowAdvancedForm] = useState(false);
   const normalizedQuery = normalizeSearch(query);
   const filtered = foods.filter((food) =>
     normalizeSearch(`${food.name} ${food.brand ?? ""} ${food.category}`).includes(normalizedQuery),
   );
+  const quickResults = quickFoods.filter((food) => {
+    const searchText = `${food.name} ${food.brand ?? ""} ${food.category} ${food.tags.join(" ")}`;
+    const exists = foods.some((item) => item.id === food.id || normalizeSearch(item.name) === normalizeSearch(food.name));
+    return !exists && (!normalizedQuery || normalizeSearch(searchText).includes(normalizedQuery));
+  }).slice(0, 6);
   const canSubmit = form.name.trim().length > 0 && form.baseAmount > 0 && (form.calories > 0 || form.protein > 0);
 
   function updateForm<K extends keyof FoodForm>(key: K, value: FoodForm[K]) {
@@ -472,12 +551,14 @@ function FoodsView() {
   function openNewFoodForm() {
     setEditingFoodId(null);
     setForm(emptyFoodForm);
+    setShowAdvancedForm(false);
     setFormOpen((current) => !current);
   }
 
   function editFood(food: FoodItem) {
     setEditingFoodId(food.id);
     setForm(foodToForm(food));
+    setShowAdvancedForm(true);
     setFormOpen(true);
   }
 
@@ -511,26 +592,71 @@ function FoodsView() {
 
     setForm(emptyFoodForm);
     setEditingFoodId(null);
+    setShowAdvancedForm(false);
     setFormOpen(false);
+  }
+
+  function addQuickFood(food: QuickFood) {
+    addFood({
+      id: food.id,
+      name: food.name,
+      emoji: food.emoji,
+      brand: food.brand,
+      baseAmount: food.baseAmount,
+      unit: food.unit,
+      nutrients: food.nutrients,
+      category: food.category,
+      favorite: food.favorite,
+    });
   }
 
   return (
     <section className="space-y-4">
-      <AppHeader eyebrow={`${foods.length}개 음식`} title="음식 DB" aside="라벨 기준" />
+      <AppHeader eyebrow={`${foods.length}개 음식`} title="음식 DB" aside="빠른 추가" />
 
       <div className="flex gap-2">
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="음식명, 브랜드, 카테고리 검색"
+          placeholder="예: 아보카도, 블루베리, 두부"
           className="h-12 min-w-0 flex-1 rounded-lg bg-white px-4 text-base font-bold text-[#111827] shadow-sm outline-none ring-1 ring-slate-200 placeholder:text-[#9CA3AF]"
         />
         <button
           onClick={openNewFoodForm}
           className="h-12 shrink-0 rounded-lg bg-[#111827] px-4 text-sm font-black text-white shadow-lg shadow-slate-300 transition active:scale-[0.98]"
         >
-          {formOpen ? "닫기" : "등록"}
+          {formOpen ? "닫기" : "직접 입력"}
         </button>
+      </div>
+
+      <div className="rounded-lg bg-[#111827] p-4 text-white shadow-xl shadow-slate-300">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-black text-slate-300">검색해서 바로 추가</p>
+            <h2 className="mt-1 text-xl font-black">복잡한 영양 입력 없이 시작</h2>
+          </div>
+          <span className="rounded-md bg-white/10 px-3 py-1.5 text-xs font-black text-slate-200">탭 추가</span>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          {quickResults.map((food) => (
+            <button
+              key={food.id}
+              onClick={() => addQuickFood(food)}
+              className="rounded-lg bg-white p-3 text-left text-[#111827] transition active:scale-[0.98]"
+            >
+              <p className="text-2xl">{food.emoji}</p>
+              <p className="mt-1 truncate text-sm font-black">{food.name}</p>
+              <p className="mt-0.5 text-xs font-bold text-[#7B8494]">
+                {food.nutrients.calories}kcal · 단백질 {food.nutrients.protein}g
+              </p>
+            </button>
+          ))}
+          {quickResults.length === 0 && (
+            <div className="col-span-2 rounded-lg bg-white/10 px-4 py-5 text-center text-sm font-bold text-slate-300">
+              추천 목록에 없으면 직접 입력을 눌러 간단히 등록하세요
+            </div>
+          )}
+        </div>
       </div>
 
       {formOpen && (
@@ -538,13 +664,14 @@ function FoodsView() {
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-black">{editingFoodId ? "음식 수정" : "음식 등록"}</h2>
-              <p className="mt-1 text-xs font-bold text-[#7B8494]">제품 라벨 기준으로 입력하면 계산이 더 정확해집니다</p>
+              <p className="mt-1 text-xs font-bold text-[#7B8494]">처음엔 음식명, 칼로리, 단백질만 넣어도 됩니다</p>
             </div>
             {editingFoodId && (
               <button
                 onClick={() => {
                   setEditingFoodId(null);
                   setForm(emptyFoodForm);
+                  setShowAdvancedForm(false);
                 }}
                 className="rounded-md bg-[#EEF2F7] px-3 py-1.5 text-xs font-black text-[#111827]"
               >
@@ -555,7 +682,6 @@ function FoodsView() {
           <div className="grid grid-cols-2 gap-3">
             <TextField label="음식명" value={form.name} onChange={(value) => updateForm("name", value)} />
             <TextField label="이모지" value={form.emoji} onChange={(value) => updateForm("emoji", value)} />
-            <TextField label="브랜드" value={form.brand} onChange={(value) => updateForm("brand", value)} />
             <NumberField label="기준량" value={form.baseAmount} onChange={(value) => updateForm("baseAmount", value)} />
             <label className="block">
               <span className="text-xs font-bold text-[#7B8494]">단위</span>
@@ -571,14 +697,25 @@ function FoodsView() {
                 ))}
               </select>
             </label>
-            <TextField label="카테고리" value={form.category} onChange={(value) => updateForm("category", value)} />
             <NumberField label="칼로리" value={form.calories} onChange={(value) => updateForm("calories", value)} unit="kcal" />
-            <NumberField label="탄수" value={form.carbs} onChange={(value) => updateForm("carbs", value)} unit="g" />
             <NumberField label="단백질" value={form.protein} onChange={(value) => updateForm("protein", value)} unit="g" />
-            <NumberField label="지방" value={form.fat} onChange={(value) => updateForm("fat", value)} unit="g" />
-            <NumberField label="당류" value={form.sugar} onChange={(value) => updateForm("sugar", value)} unit="g" />
-            <NumberField label="나트륨" value={form.sodium} onChange={(value) => updateForm("sodium", value)} unit="mg" />
           </div>
+          <button
+            onClick={() => setShowAdvancedForm((current) => !current)}
+            className="mt-3 w-full rounded-lg bg-[#F1F5F9] px-4 py-3 text-sm font-black text-[#111827]"
+          >
+            {showAdvancedForm ? "선택 입력 닫기" : "브랜드·탄수·지방 등 선택 입력"}
+          </button>
+          {showAdvancedForm && (
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <TextField label="브랜드" value={form.brand} onChange={(value) => updateForm("brand", value)} />
+              <TextField label="카테고리" value={form.category} onChange={(value) => updateForm("category", value)} />
+              <NumberField label="탄수" value={form.carbs} onChange={(value) => updateForm("carbs", value)} unit="g" />
+              <NumberField label="지방" value={form.fat} onChange={(value) => updateForm("fat", value)} unit="g" />
+              <NumberField label="당류" value={form.sugar} onChange={(value) => updateForm("sugar", value)} unit="g" />
+              <NumberField label="나트륨" value={form.sodium} onChange={(value) => updateForm("sodium", value)} unit="mg" />
+            </div>
+          )}
           <button
             disabled={!canSubmit}
             onClick={saveFood}

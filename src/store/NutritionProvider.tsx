@@ -124,7 +124,7 @@ function readInitialState(): StoredNutritionState {
 }
 
 function mergeDefaultFoodMetadata(foods: FoodItem[]) {
-  return foods.map((food) => {
+  const mergedFoods = foods.map((food) => {
     const defaultFood = defaultFoods.find((item) => item.id === food.id);
     if (!defaultFood) return food;
 
@@ -137,6 +137,12 @@ function mergeDefaultFoodMetadata(foods: FoodItem[]) {
       },
     };
   });
+
+  const savedIds = new Set(mergedFoods.map((food) => food.id));
+  return [
+    ...mergedFoods,
+    ...defaultFoods.filter((food) => !savedIds.has(food.id)),
+  ];
 }
 
 export function NutritionProvider({ children }: { children: React.ReactNode }) {
