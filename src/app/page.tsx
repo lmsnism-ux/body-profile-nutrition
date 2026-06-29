@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { addDays, koreanDate, monthDates, todayKey, weekDates } from "@/lib/date";
-import { mealTemplateSummaries } from "@/data/defaultMealTemplates";
+import { mealTemplatePlan, mealTemplateSummaries } from "@/data/defaultMealTemplates";
 import { calculateDailyNutrition, calculateEntryNutrition, round, scoreDay, targetForWeight } from "@/lib/nutrition";
 import { NutritionProvider, useNutrition } from "@/store/NutritionProvider";
 import type { DailyLog, FoodItem, MealType, Nutrients, NutritionTarget, Unit } from "@/types/nutrition";
@@ -46,8 +46,16 @@ const coreMeals: MealType[] = ["아침", "점심", "간식", "저녁"];
 
 const rotationGroups = [
   { label: "채소", emoji: "🥬", foodIds: ["cucumber", "cabbage", "frozen-vegetables", "cherry-tomato"] },
-  { label: "단백질", emoji: "🍗", foodIds: ["chicken-23", "chicken-thigh", "tofu", "boiled-egg", "beef"] },
-  { label: "과일", emoji: "🍎", foodIds: ["banana", "blueberry", "avocado", "apple"] },
+  { label: "단백질", emoji: "🍗", foodIds: ["chicken-18", "chicken-thigh", "beef", "deli-bbq", "nuldam-protein-bread", "maeil-soy", "tofu", "boiled-egg"] },
+  { label: "과일", emoji: "🫐", foodIds: ["banana", "blueberry", "avocado", "apple"] },
+];
+
+const mealRoleGroups = [
+  { label: "탄수화물", emoji: "🍚", foodIds: ["mixed-rice", "banana", "blueberry", "nuldam-protein-bread", "maeil-soy"] },
+  { label: "단백질", emoji: "🍗", foodIds: ["chicken-18", "chicken-thigh", "beef", "deli-bbq", "nuldam-protein-bread", "maeil-soy", "tofu", "boiled-egg", "protein-shake"] },
+  { label: "지방", emoji: "🥑", foodIds: ["nuts", "avocado", "boiled-egg", "tofu"] },
+  { label: "채소", emoji: "🥬", foodIds: ["cucumber", "cabbage", "frozen-vegetables", "cherry-tomato"] },
+  { label: "과일", emoji: "🫐", foodIds: ["blueberry", "banana", "avocado", "apple"] },
 ];
 
 const emptyFoodForm: FoodForm = {
@@ -108,7 +116,7 @@ function NutritionApp() {
 }
 
 function HomeView({ goMeals }: { goMeals: () => void }) {
-  const { profile, log, logsByDate, selectedDate, selectDate, setDayType, setWeight, foods, loadDefaultMeals } = useNutrition();
+  const { profile, log, logsByDate, selectedDate, selectDate, setWeight, foods, loadDefaultMeals } = useNutrition();
   const total = useMemo(() => calculateDailyNutrition(log.entries, foods), [foods, log.entries]);
   const target = targetForWeight(log.weightKg, log.dayType);
   const hasDeviation = log.entries.some((entry) => entry.mealType === "이탈음식");
@@ -125,7 +133,7 @@ function HomeView({ goMeals }: { goMeals: () => void }) {
       <AppHeader
         eyebrow={koreanDate(selectedDate)}
         title={`${profile.name}의 식단`}
-        aside={`${log.dayType === "training" ? "운동일" : "휴식일"} 기준`}
+        aside="단백질 기준"
       />
 
       <DateRail dates={dateOptions} selectedDate={selectedDate} onSelect={selectDate} />
@@ -157,7 +165,7 @@ function HomeView({ goMeals }: { goMeals: () => void }) {
         </div>
         <button
           onClick={() => {
-            if (mealCount === 0) loadDefaultMeals("chicken-23", "replace");
+            if (mealCount === 0) loadDefaultMeals("replace");
             goMeals();
           }}
           className="mt-5 h-13 w-full rounded-lg bg-white text-base font-black text-[#111827] shadow-lg shadow-black/20 transition active:scale-[0.99]"
@@ -170,27 +178,13 @@ function HomeView({ goMeals }: { goMeals: () => void }) {
 
       <MealFlowOverview log={log} foods={foods} target={target} goMeals={goMeals} />
 
-      <div className="grid grid-cols-2 gap-3">
-        <InfoCard label="목표">
-          <p className="text-4xl font-black">{profile.targetWeightKg}</p>
-          <p className="mt-1 text-xs font-bold text-[#7B8494]">kg · 체지방 {profile.targetBodyFatPercent}%</p>
-        </InfoCard>
-        <InfoCard label="자동 목표">
-          <p className="text-4xl font-black">{target.protein}g</p>
-          <p className="mt-1 text-xs font-bold text-[#7B8494]">단백질 · {target.calories}kcal</p>
-        </InfoCard>
-      </div>
-
-      <div className="rounded-lg bg-white p-1 shadow-sm ring-1 ring-slate-200">
-        <div className="grid grid-cols-2 gap-1">
-          <SegmentButton active={log.dayType === "training"} onClick={() => setDayType("training")}>
-            운동일
-          </SegmentButton>
-          <SegmentButton active={log.dayType === "rest"} onClick={() => setDayType("rest")}>
-            휴식일
-          </SegmentButton>
+      <InfoCard label="체중 기반 자동 목표">
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <MetricPill label="단백질" value={`${target.protein}g`} />
+          <MetricPill label="탄수" value={`${target.carbs}g`} />
+          <MetricPill label="칼로리" value={target.calories} />
         </div>
-      </div>
+      </InfoCard>
 
       <FocusNote total={total} target={target} hasDeviation={hasDeviation} />
 
@@ -206,8 +200,7 @@ function HomeView({ goMeals }: { goMeals: () => void }) {
 }
 
 function MealsView() {
-  const { log, foods, loadDefaultMeals, applyMealTemplate, addEntry, rotateMealFood, updateEntryAmount, removeEntry } = useNutrition();
-  const [chicken, setChicken] = useState<"chicken-18" | "chicken-23">("chicken-23");
+  const { log, foods, loadDefaultMeals, applyMealTemplate, addEntry, rotateMealFood, replaceMealFood, updateEntryAmount, removeEntry } = useNutrition();
   const [selectedMeal, setSelectedMeal] = useState<MealType>("아침");
   const favoriteFoods = foods.filter((food) => food.favorite);
   const total = useMemo(() => calculateDailyNutrition(log.entries, foods), [foods, log.entries]);
@@ -219,11 +212,11 @@ function MealsView() {
     if (mode === "replace" && log.entries.length > 0 && !window.confirm("현재 식단을 지우고 기본 식단으로 바꿀까요?")) {
       return;
     }
-    loadDefaultMeals(chicken, mode);
+    loadDefaultMeals(mode);
   }
 
   function addCurrentMealTemplate() {
-    applyMealTemplate(selectedMeal, chicken);
+    applyMealTemplate(selectedMeal);
   }
 
   return (
@@ -231,15 +224,7 @@ function MealsView() {
       <AppHeader eyebrow={koreanDate(log.date)} title="오늘 식단" aside={`${log.entries.length}개 입력`} />
 
       <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
-        <div className="grid grid-cols-2 gap-1 rounded-lg bg-[#F1F5F9] p-1">
-          <SegmentButton active={chicken === "chicken-18"} onClick={() => setChicken("chicken-18")}>
-            닭 18g
-          </SegmentButton>
-          <SegmentButton active={chicken === "chicken-23"} onClick={() => setChicken("chicken-23")}>
-            닭 23g
-          </SegmentButton>
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <button
             onClick={addCurrentMealTemplate}
             className="h-12 rounded-lg bg-[#111827] text-sm font-black text-white transition active:scale-[0.99]"
@@ -261,6 +246,8 @@ function MealsView() {
       </div>
 
       <MealSwitcher selectedMeal={selectedMeal} entries={log.entries} foods={foods} onSelect={setSelectedMeal} />
+
+      <TemplatePreview mealType={selectedMeal} foods={foods} />
 
       <div className="rounded-lg bg-[#111827] p-4 text-white shadow-xl shadow-slate-300">
         <div className="flex items-start justify-between gap-3">
@@ -304,6 +291,8 @@ function MealsView() {
           ))}
         </div>
       </div>
+
+      <RoleSwapPanel mealType={selectedMeal} entries={selectedEntries} foods={foods} onReplace={replaceMealFood} />
 
       <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
         <div className="flex items-center justify-between gap-3">
@@ -386,6 +375,92 @@ function MealsView() {
         </div>
       </div>
     </section>
+  );
+}
+
+function TemplatePreview({ mealType, foods }: { mealType: MealType; foods: FoodItem[] }) {
+  const plan = mealTemplatePlan[mealType] ?? [];
+
+  return (
+    <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-black">기본 템플릿 구성</h2>
+          <p className="mt-1 text-xs font-bold text-[#7B8494]">{mealType} 템플릿을 누르면 아래 음식이 들어갑니다</p>
+        </div>
+        <span className="rounded-md bg-[#F1F5F9] px-3 py-1.5 text-xs font-black text-[#566174]">닭 18g</span>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        {plan.map((item) => {
+          const food = foods.find((food) => food.id === item.foodId);
+          return (
+            <div key={`${mealType}-${item.foodId}`} className="rounded-lg bg-[#F8FAFC] p-3 ring-1 ring-slate-200">
+              <p className="text-xl">{food?.emoji ?? "🍽️"}</p>
+              <p className="mt-1 truncate text-sm font-black">{food?.name ?? item.foodId}</p>
+              <p className="mt-0.5 text-xs font-bold text-[#7B8494]">
+                {item.amount}
+                {item.unit}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function RoleSwapPanel({
+  mealType,
+  entries,
+  foods,
+  onReplace,
+}: {
+  mealType: MealType;
+  entries: DailyLog["entries"];
+  foods: FoodItem[];
+  onReplace: (mealType: MealType, currentFoodIds: string[], nextFoodId: string) => void;
+}) {
+  return (
+    <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
+      <div>
+        <h2 className="text-xl font-black">역할별 음식 교체</h2>
+        <p className="mt-1 text-xs font-bold text-[#7B8494]">같은 역할 안에서 터치하면 현재 음식이 바로 바뀝니다</p>
+      </div>
+      <div className="mt-4 space-y-3">
+        {mealRoleGroups.map((group) => {
+          const currentEntry = entries.find((entry) => group.foodIds.includes(entry.foodId));
+          const currentFood = foods.find((food) => food.id === currentEntry?.foodId);
+          const choices = group.foodIds
+            .map((foodId) => foods.find((food) => food.id === foodId))
+            .filter((food): food is FoodItem => Boolean(food));
+
+          return (
+            <div key={group.label} className="rounded-lg bg-[#F8FAFC] p-3 ring-1 ring-slate-200">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-black">
+                  {group.emoji} {group.label}
+                </p>
+                <p className="truncate text-xs font-bold text-[#7B8494]">{currentFood ? currentFood.name : "미설정"}</p>
+              </div>
+              <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                {choices.map((food) => (
+                  <button
+                    key={food.id}
+                    onClick={() => onReplace(mealType, group.foodIds, food.id)}
+                    className={`shrink-0 rounded-lg px-3 py-2 text-left text-xs font-black transition active:scale-[0.98] ${
+                      currentFood?.id === food.id ? "bg-[#111827] text-white" : "bg-white text-[#111827] ring-1 ring-slate-200"
+                    }`}
+                  >
+                    <span className="mr-1">{food.emoji ?? "🍽️"}</span>
+                    {food.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -509,6 +584,8 @@ function TrendPanel({ week, month }: { week: PeriodSummary; month: PeriodSummary
       <div className="mt-4 space-y-3">
         <MiniBars title="주간 체중" items={week.weights} unit="kg" />
         <MiniBars title="주간 단백질" items={week.proteins} unit="g" />
+        <MiniBars title="월간 체중" items={month.weights} unit="kg" />
+        <MiniBars title="월간 단백질" items={month.proteins} unit="g" />
       </div>
     </div>
   );
@@ -550,7 +627,7 @@ function MiniBars({ title, items, unit }: { title: string; items: Array<{ date: 
 }
 
 function AnalysisView() {
-  const { logsByDate, foods, nutritionTargets, updateTarget } = useNutrition();
+  const { logsByDate, foods } = useNutrition();
   const today = todayKey();
   const days = useMemo(() => [-6, -5, -4, -3, -2, -1, 0].map((offset) => addDays(today, offset)), [today]);
   const summaries = days.map((date) => {
@@ -626,8 +703,6 @@ function AnalysisView() {
           ))}
         </div>
       </div>
-
-      <TargetSettings targets={nutritionTargets} updateTarget={updateTarget} />
 
       <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
         <h2 className="text-xl font-black">다음 개선 포인트</h2>
@@ -894,47 +969,6 @@ function ScoreDial({ score }: { score: number }) {
   );
 }
 
-function TargetSettings({
-  targets,
-  updateTarget,
-}: {
-  targets: Record<DailyLog["dayType"], NutritionTarget>;
-  updateTarget: (dayType: DailyLog["dayType"], key: keyof NutritionTarget, value: number) => void;
-}) {
-  const [dayType, setDayType] = useState<DailyLog["dayType"]>("training");
-  const target = targets[dayType];
-
-  return (
-    <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-black">목표 조정</h2>
-          <p className="mt-1 text-xs font-bold text-[#7B8494]">운동일과 휴식일 기준을 따로 저장합니다</p>
-        </div>
-        <div className="grid grid-cols-2 gap-1 rounded-lg bg-[#F1F5F9] p-1">
-          <SmallSegment active={dayType === "training"} onClick={() => setDayType("training")}>
-            운동
-          </SmallSegment>
-          <SmallSegment active={dayType === "rest"} onClick={() => setDayType("rest")}>
-            휴식
-          </SmallSegment>
-        </div>
-      </div>
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        {(Object.keys(nutrientLabels) as NutrientKey[]).map((key) => (
-          <NumberField
-            key={key}
-            label={nutrientLabels[key].label}
-            value={target[key]}
-            onChange={(value) => updateTarget(dayType, key, value)}
-            unit={nutrientLabels[key].unit}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function FocusNote({ total, target, hasDeviation }: { total: Nutrients; target: NutritionTarget; hasDeviation: boolean }) {
   let text = "지금 흐름은 안정적입니다. 다음 식사도 같은 기준으로 기록하면 됩니다.";
   let tone = "border-[#2DD4BF]/30 bg-[#ECFDF5] text-[#065F46]";
@@ -1111,32 +1145,6 @@ function InfoCard({ label, children }: { label: string; children: React.ReactNod
   );
 }
 
-function SegmentButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-md py-3 text-sm font-black transition active:scale-[0.98] ${
-        active ? "bg-white text-[#111827] shadow-sm" : "text-[#7B8494]"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function SmallSegment({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-md px-3 py-2 text-xs font-black transition active:scale-[0.98] ${
-        active ? "bg-white text-[#111827] shadow-sm" : "text-[#7B8494]"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
 function AmountButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (
     <button onClick={onClick} className="h-12 rounded-lg bg-[#EEF2F7] text-xl font-black text-[#111827] transition active:scale-[0.95]">
@@ -1221,8 +1229,8 @@ function summarizePeriod(dates: string[], logsByDate: Record<string, DailyLog>, 
     avgWeight: weights.length ? weights.reduce((sum, item) => sum + item.weight, 0) / weights.length : 0,
     avgProtein: proteins.length ? proteins.reduce((sum, item) => sum + item.protein, 0) / proteins.length : 0,
     proteinHit: proteins.filter((item) => item.protein >= targetForWeight(logsByDate[item.date]?.weightKg ?? 82, logsByDate[item.date]?.dayType ?? "training").protein * 0.9).length,
-    weights: items.slice(-7).map((item) => ({ date: item.date, value: item.weight })),
-    proteins: items.slice(-7).map((item) => ({ date: item.date, value: item.protein })),
+    weights: items.map((item) => ({ date: item.date, value: item.weight })),
+    proteins: items.map((item) => ({ date: item.date, value: item.protein })),
   };
 }
 

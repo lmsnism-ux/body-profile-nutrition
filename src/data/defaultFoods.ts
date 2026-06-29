@@ -13,9 +13,8 @@ export const defaultFoods: FoodItem[] = [
   },
   {
     id: "maeil-soy",
-    name: "매일 두유",
+    name: "두유",
     emoji: "🥛",
-    brand: "매일",
     baseAmount: 190,
     unit: "ml",
     nutrients: { calories: 125, carbs: 9, sugar: 5, fat: 5, protein: 12, sodium: 180 },

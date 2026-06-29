@@ -1,7 +1,6 @@
 import type { MealEntry, MealType } from "@/types/nutrition";
 
 const id = (mealType: MealType, foodId: string) => `${mealType}-${foodId}-${crypto.randomUUID()}`;
-type ChickenFoodId = "chicken-18" | "chicken-23";
 
 const mealTimes: Partial<Record<MealType, string>> = {
   아침: "06:30",
@@ -19,56 +18,47 @@ export const mealTemplateSummaries: Record<MealType, { title: string; emoji: str
   이탈음식: { title: "이탈 기록", emoji: "🍕", subtitle: "정확히 기록하고 다음 끼니 조정" },
 };
 
+export const mealTemplatePlan: Partial<Record<MealType, Array<{ foodId: string; amount: number; unit: MealEntry["unit"] }>>> = {
+  아침: [
+    { foodId: "boiled-egg", amount: 3, unit: "개" },
+    { foodId: "greek-yogurt", amount: 90, unit: "g" },
+    { foodId: "maeil-soy", amount: 190, unit: "ml" },
+    { foodId: "blueberry", amount: 100, unit: "g" },
+    { foodId: "nuts", amount: 20, unit: "g" },
+  ],
+  점심: [
+    { foodId: "mixed-rice", amount: 200, unit: "g" },
+    { foodId: "chicken-18", amount: 2, unit: "팩" },
+    { foodId: "seaweed", amount: 4, unit: "g" },
+    { foodId: "cherry-tomato", amount: 1, unit: "줌" },
+  ],
+  간식: [
+    { foodId: "protein-shake", amount: 1, unit: "회" },
+    { foodId: "banana", amount: 1, unit: "개" },
+    { foodId: "creatine", amount: 1, unit: "회" },
+  ],
+  저녁: [
+    { foodId: "mixed-rice", amount: 200, unit: "g" },
+    { foodId: "chicken-18", amount: 2, unit: "팩" },
+    { foodId: "seaweed", amount: 4, unit: "g" },
+    { foodId: "cherry-tomato", amount: 1, unit: "줌" },
+    { foodId: "zero-drink", amount: 1, unit: "개" },
+  ],
+};
+
 function entry(mealType: MealType, foodId: string, amount: number, unit: MealEntry["unit"]): MealEntry {
   return { id: id(mealType, foodId), mealType, foodId, amount, unit, time: mealTimes[mealType] };
 }
 
-export function createMealTemplate(mealType: MealType, chickenFoodId: ChickenFoodId): MealEntry[] {
-  if (mealType === "아침") {
-    return [
-      entry("아침", "boiled-egg", 3, "개"),
-      entry("아침", "greek-yogurt", 90, "g"),
-      entry("아침", "maeil-soy", 190, "ml"),
-      entry("아침", "apple", 1, "개"),
-      entry("아침", "nuts", 20, "g"),
-    ];
-  }
-
-  if (mealType === "점심") {
-    return [
-      entry("점심", "mixed-rice", 200, "g"),
-      entry("점심", chickenFoodId, 2, "팩"),
-      entry("점심", "seaweed", 4, "g"),
-      entry("점심", "cherry-tomato", 1, "줌"),
-    ];
-  }
-
-  if (mealType === "간식") {
-    return [
-      entry("간식", "protein-shake", 1, "회"),
-      entry("간식", "banana", 1, "개"),
-      entry("간식", "creatine", 1, "회"),
-    ];
-  }
-
-  if (mealType === "저녁") {
-    return [
-      entry("저녁", "mixed-rice", 200, "g"),
-      entry("저녁", chickenFoodId, 2, "팩"),
-      entry("저녁", "seaweed", 4, "g"),
-      entry("저녁", "cherry-tomato", 1, "줌"),
-      entry("저녁", "zero-drink", 1, "개"),
-    ];
-  }
-
-  return [];
+export function createMealTemplate(mealType: MealType): MealEntry[] {
+  return (mealTemplatePlan[mealType] ?? []).map((item) => entry(mealType, item.foodId, item.amount, item.unit));
 }
 
-export function createDefaultMealTemplate(chickenFoodId: ChickenFoodId): MealEntry[] {
+export function createDefaultMealTemplate(): MealEntry[] {
   return [
-    ...createMealTemplate("아침", chickenFoodId),
-    ...createMealTemplate("점심", chickenFoodId),
-    ...createMealTemplate("간식", chickenFoodId),
-    ...createMealTemplate("저녁", chickenFoodId),
+    ...createMealTemplate("아침"),
+    ...createMealTemplate("점심"),
+    ...createMealTemplate("간식"),
+    ...createMealTemplate("저녁"),
   ];
 }

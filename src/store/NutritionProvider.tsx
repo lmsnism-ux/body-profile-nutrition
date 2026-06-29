@@ -18,13 +18,13 @@ type NutritionContextValue = {
   nutritionTargets: NutritionTargetsByDay;
   groceries: GroceryItem[];
   selectDate: (date: string) => void;
-  setDayType: (dayType: DailyLog["dayType"]) => void;
   setWeight: (weightKg: number) => void;
   updateTarget: (dayType: DailyLog["dayType"], key: keyof NutritionTarget, value: number) => void;
-  loadDefaultMeals: (chickenFoodId: "chicken-18" | "chicken-23", mode?: "replace" | "append") => void;
-  applyMealTemplate: (mealType: MealType, chickenFoodId: "chicken-18" | "chicken-23") => void;
+  loadDefaultMeals: (mode?: "replace" | "append") => void;
+  applyMealTemplate: (mealType: MealType) => void;
   addEntry: (foodId: string, mealType: MealType) => void;
   rotateMealFood: (mealType: MealType, foodIds: string[]) => void;
+  replaceMealFood: (mealType: MealType, currentFoodIds: string[], nextFoodId: string) => void;
   updateEntryAmount: (entryId: string, amount: number) => void;
   removeEntry: (entryId: string) => void;
   addFood: (food: FoodItem) => void;
@@ -65,10 +65,11 @@ type StoredNutritionState = {
   nutritionTargets: NutritionTargetsByDay;
 };
 
-function createEmptyLog(date: string): DailyLog {
+function createEmptyLog(date: string, weightKg = 82): DailyLog {
   return {
     ...defaultLog,
     date,
+    weightKg,
     entries: [],
   };
 }
@@ -98,10 +99,14 @@ function readInitialState(): StoredNutritionState {
     const nutritionTargets = parsed.nutritionTargets ?? targets;
 
     if (parsed.logsByDate && Object.keys(parsed.logsByDate).length) {
+      const selectedDate = todayKey();
+      const logsByDate = parsed.logsByDate[selectedDate]
+        ? parsed.logsByDate
+        : { ...parsed.logsByDate, [selectedDate]: createEmptyLog(selectedDate, findLatestWeight(parsed.logsByDate, selectedDate)) };
       return {
         foods,
-        logsByDate: parsed.logsByDate,
-        selectedDate: parsed.selectedDate ?? todayKey(),
+        logsByDate,
+        selectedDate,
         nutritionTargets,
       };
     }
@@ -111,7 +116,7 @@ function readInitialState(): StoredNutritionState {
         foods,
         logsByDate: {
           [parsed.log.date]: parsed.log,
-          [todayKey()]: parsed.log.date === todayKey() ? parsed.log : createEmptyLog(todayKey()),
+          [todayKey()]: parsed.log.date === todayKey() ? parsed.log : createEmptyLog(todayKey(), parsed.log.weightKg || 82),
         },
         selectedDate: parsed.log.date === todayKey() ? parsed.log.date : todayKey(),
         nutritionTargets,
@@ -129,7 +134,7 @@ function mergeDefaultFoodMetadata(foods: FoodItem[]) {
     const defaultFood = defaultFoods.find((item) => item.id === food.id);
     if (!defaultFood) return food;
 
-    return {
+    const mergedFood = {
       ...food,
       emoji: food.emoji ?? defaultFood.emoji,
       nutrients: {
@@ -137,6 +142,15 @@ function mergeDefaultFoodMetadata(foods: FoodItem[]) {
         ...food.nutrients,
       },
     };
+    if (food.id === "maeil-soy") {
+      return {
+        ...mergedFood,
+        name: defaultFood.name,
+        brand: defaultFood.brand,
+      };
+    }
+
+    return mergedFood;
   });
 
   const savedIds = new Set(mergedFoods.map((food) => food.id));
@@ -144,6 +158,13 @@ function mergeDefaultFoodMetadata(foods: FoodItem[]) {
     ...mergedFoods,
     ...defaultFoods.filter((food) => !savedIds.has(food.id)),
   ];
+}
+
+function findLatestWeight(logsByDate: DailyLogsByDate, date: string) {
+  const previous = Object.values(logsByDate)
+    .filter((log) => log.date < date && log.weightKg > 0)
+    .sort((a, b) => b.date.localeCompare(a.date))[0];
+  return previous?.weightKg ?? 82;
 }
 
 export function NutritionProvider({ children }: { children: React.ReactNode }) {
@@ -179,9 +200,8 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
     groceries,
     selectDate: (date) => {
       setSelectedDate(date);
-      setLogsByDate((current) => current[date] ? current : { ...current, [date]: createEmptyLog(date) });
+      setLogsByDate((current) => current[date] ? current : { ...current, [date]: createEmptyLog(date, findLatestWeight(current, date)) });
     },
-    setDayType: (dayType) => updateSelectedLog((current) => ({ ...current, dayType })),
     setWeight: (weightKg) => updateSelectedLog((current) => ({ ...current, weightKg })),
     updateTarget: (dayType, key, value) =>
       setNutritionTargets((current) => ({
@@ -191,17 +211,17 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
           [key]: Math.max(0, value),
         },
       })),
-    loadDefaultMeals: (chickenFoodId, mode = "replace") =>
+    loadDefaultMeals: (mode = "replace") =>
       updateSelectedLog((current) => {
-        const template = createDefaultMealTemplate(chickenFoodId);
+        const template = createDefaultMealTemplate();
         return { ...current, entries: mode === "append" ? [...current.entries, ...template] : template };
       }),
-    applyMealTemplate: (mealType, chickenFoodId) =>
+    applyMealTemplate: (mealType) =>
       updateSelectedLog((current) => ({
         ...current,
         entries: [
           ...current.entries.filter((entry) => entry.mealType !== mealType),
-          ...createMealTemplate(mealType, chickenFoodId),
+          ...createMealTemplate(mealType),
         ],
       })),
     addEntry: (foodId, mealType) => {
@@ -244,6 +264,29 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
         }
 
         return { ...current, entries: [...current.entries, nextEntry] };
+      });
+    },
+    replaceMealFood: (mealType, currentFoodIds, nextFoodId) => {
+      const nextFood = foods.find((food) => food.id === nextFoodId);
+      if (!nextFood) return;
+
+      updateSelectedLog((current) => {
+        const currentEntry = current.entries.find((entry) => entry.mealType === mealType && currentFoodIds.includes(entry.foodId));
+        const nextEntry: MealEntry = {
+          id: currentEntry?.id ?? crypto.randomUUID(),
+          foodId: nextFoodId,
+          mealType,
+          amount: nextFood.baseAmount,
+          unit: nextFood.unit,
+          time: currentEntry?.time,
+        };
+
+        if (!currentEntry) return { ...current, entries: [...current.entries, nextEntry] };
+
+        return {
+          ...current,
+          entries: current.entries.map((entry) => entry.id === currentEntry.id ? nextEntry : entry),
+        };
       });
     },
     updateEntryAmount: (entryId, amount) =>
