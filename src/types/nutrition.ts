@@ -57,6 +57,8 @@ export type DailyLog = {
   entries: MealEntry[];
 };
 
+export type DailyLogsByDate = Record<string, DailyLog>;
+
 export type GroceryItem = {
   id: string;
   name: string;

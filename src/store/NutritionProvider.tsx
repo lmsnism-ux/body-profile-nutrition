@@ -1,23 +1,32 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { defaultFoods } from "@/data/defaultFoods";
 import { createDefaultMealTemplate } from "@/data/defaultMealTemplates";
 import { todayKey } from "@/lib/date";
-import type { DailyLog, FoodItem, GroceryItem, MealEntry, MealType, UserProfile } from "@/types/nutrition";
+import { targets } from "@/lib/nutrition";
+import type { DailyLog, DailyLogsByDate, FoodItem, GroceryItem, MealEntry, MealType, NutritionTarget, UserProfile } from "@/types/nutrition";
+
+type NutritionTargetsByDay = Record<DailyLog["dayType"], NutritionTarget>;
 
 type NutritionContextValue = {
   profile: UserProfile;
   foods: FoodItem[];
   log: DailyLog;
+  logsByDate: DailyLogsByDate;
+  selectedDate: string;
+  nutritionTargets: NutritionTargetsByDay;
   groceries: GroceryItem[];
+  selectDate: (date: string) => void;
   setDayType: (dayType: DailyLog["dayType"]) => void;
   setWeight: (weightKg: number) => void;
-  loadDefaultMeals: (chickenFoodId: "chicken-18" | "chicken-23") => void;
+  updateTarget: (dayType: DailyLog["dayType"], key: keyof NutritionTarget, value: number) => void;
+  loadDefaultMeals: (chickenFoodId: "chicken-18" | "chicken-23", mode?: "replace" | "append") => void;
   addEntry: (foodId: string, mealType: MealType) => void;
   updateEntryAmount: (entryId: string, amount: number) => void;
   removeEntry: (entryId: string) => void;
   addFood: (food: FoodItem) => void;
+  updateFood: (food: FoodItem) => void;
 };
 
 const profile: UserProfile = {
@@ -47,37 +56,122 @@ const defaultGroceries: GroceryItem[] = [
 
 const NutritionContext = createContext<NutritionContextValue | null>(null);
 
-export function NutritionProvider({ children }: { children: React.ReactNode }) {
-  const [foods, setFoods] = useState<FoodItem[]>(defaultFoods);
-  const [log, setLog] = useState<DailyLog>(defaultLog);
-  const [groceries] = useState<GroceryItem[]>(defaultGroceries);
+type StoredNutritionState = {
+  foods: FoodItem[];
+  logsByDate: DailyLogsByDate;
+  selectedDate: string;
+  nutritionTargets: NutritionTargetsByDay;
+};
 
-  useEffect(() => {
-    const saved = localStorage.getItem("bp-nutrition-mvp");
-    if (!saved) return;
-    try {
-      const parsed = JSON.parse(saved) as { foods?: FoodItem[]; log?: DailyLog };
-      setFoods(parsed.foods?.length ? parsed.foods : defaultFoods);
-      setLog(parsed.log?.date === todayKey() ? parsed.log : { ...defaultLog, date: todayKey() });
-    } catch {
-      setFoods(defaultFoods);
-      setLog(defaultLog);
+function createEmptyLog(date: string): DailyLog {
+  return {
+    ...defaultLog,
+    date,
+    entries: [],
+  };
+}
+
+function readInitialState(): StoredNutritionState {
+  const fallback = {
+    foods: defaultFoods,
+    logsByDate: { [todayKey()]: defaultLog },
+    selectedDate: todayKey(),
+    nutritionTargets: targets,
+  };
+
+  if (typeof window === "undefined") return fallback;
+
+  const saved = localStorage.getItem("bp-nutrition-mvp");
+  if (!saved) return fallback;
+
+  try {
+    const parsed = JSON.parse(saved) as {
+      foods?: FoodItem[];
+      log?: DailyLog;
+      logsByDate?: DailyLogsByDate;
+      selectedDate?: string;
+      nutritionTargets?: NutritionTargetsByDay;
+    };
+    const foods = parsed.foods?.length ? parsed.foods : defaultFoods;
+    const nutritionTargets = parsed.nutritionTargets ?? targets;
+
+    if (parsed.logsByDate && Object.keys(parsed.logsByDate).length) {
+      return {
+        foods,
+        logsByDate: parsed.logsByDate,
+        selectedDate: parsed.selectedDate ?? todayKey(),
+        nutritionTargets,
+      };
     }
-  }, []);
+
+    if (parsed.log) {
+      return {
+        foods,
+        logsByDate: {
+          [parsed.log.date]: parsed.log,
+          [todayKey()]: parsed.log.date === todayKey() ? parsed.log : createEmptyLog(todayKey()),
+        },
+        selectedDate: parsed.log.date === todayKey() ? parsed.log.date : todayKey(),
+        nutritionTargets,
+      };
+    }
+  } catch {
+    return fallback;
+  }
+
+  return fallback;
+}
+
+export function NutritionProvider({ children }: { children: React.ReactNode }) {
+  const [initialState] = useState(readInitialState);
+  const [foods, setFoods] = useState<FoodItem[]>(initialState.foods);
+  const [selectedDate, setSelectedDate] = useState(initialState.selectedDate);
+  const [logsByDate, setLogsByDate] = useState<DailyLogsByDate>(initialState.logsByDate);
+  const [nutritionTargets, setNutritionTargets] = useState<NutritionTargetsByDay>(initialState.nutritionTargets);
+  const [groceries] = useState<GroceryItem[]>(defaultGroceries);
+  const log = logsByDate[selectedDate] ?? createEmptyLog(selectedDate);
+
+  const updateSelectedLog = useCallback((updater: (current: DailyLog) => DailyLog) => {
+    setLogsByDate((current) => {
+      const currentLog = current[selectedDate] ?? createEmptyLog(selectedDate);
+      return {
+        ...current,
+        [selectedDate]: updater(currentLog),
+      };
+    });
+  }, [selectedDate]);
 
   useEffect(() => {
-    localStorage.setItem("bp-nutrition-mvp", JSON.stringify({ foods, log }));
-  }, [foods, log]);
+    localStorage.setItem("bp-nutrition-mvp", JSON.stringify({ foods, logsByDate, selectedDate, nutritionTargets }));
+  }, [foods, logsByDate, selectedDate, nutritionTargets]);
 
   const value = useMemo<NutritionContextValue>(() => ({
     profile,
     foods,
     log,
+    logsByDate,
+    selectedDate,
+    nutritionTargets,
     groceries,
-    setDayType: (dayType) => setLog((current) => ({ ...current, dayType })),
-    setWeight: (weightKg) => setLog((current) => ({ ...current, weightKg })),
-    loadDefaultMeals: (chickenFoodId) =>
-      setLog((current) => ({ ...current, entries: createDefaultMealTemplate(chickenFoodId) })),
+    selectDate: (date) => {
+      setSelectedDate(date);
+      setLogsByDate((current) => current[date] ? current : { ...current, [date]: createEmptyLog(date) });
+    },
+    setDayType: (dayType) => updateSelectedLog((current) => ({ ...current, dayType })),
+    setWeight: (weightKg) => updateSelectedLog((current) => ({ ...current, weightKg })),
+    updateTarget: (dayType, key, value) =>
+      setNutritionTargets((current) => ({
+        ...current,
+        [dayType]: {
+          ...current[dayType],
+          [key]: Math.max(0, value),
+        },
+      })),
+    loadDefaultMeals: (chickenFoodId, mode = "replace") =>
+      updateSelectedLog((current) => {
+        const template = createDefaultMealTemplate(chickenFoodId);
+        return { ...current, entries: mode === "append" ? [...current.entries, ...template] : template };
+      }),
     addEntry: (foodId, mealType) => {
       const food = foods.find((item) => item.id === foodId);
       if (!food) return;
@@ -88,19 +182,20 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
         amount: food.baseAmount,
         unit: food.unit,
       };
-      setLog((current) => ({ ...current, entries: [...current.entries, entry] }));
+      updateSelectedLog((current) => ({ ...current, entries: [...current.entries, entry] }));
     },
     updateEntryAmount: (entryId, amount) =>
-      setLog((current) => ({
+      updateSelectedLog((current) => ({
         ...current,
         entries: current.entries.map((entry) =>
           entry.id === entryId ? { ...entry, amount: Math.max(0, amount) } : entry,
         ),
       })),
     removeEntry: (entryId) =>
-      setLog((current) => ({ ...current, entries: current.entries.filter((entry) => entry.id !== entryId) })),
+      updateSelectedLog((current) => ({ ...current, entries: current.entries.filter((entry) => entry.id !== entryId) })),
     addFood: (food) => setFoods((current) => [food, ...current]),
-  }), [foods, groceries, log]);
+    updateFood: (food) => setFoods((current) => current.map((item) => item.id === food.id ? food : item)),
+  }), [foods, groceries, log, logsByDate, nutritionTargets, selectedDate, updateSelectedLog]);
 
   return <NutritionContext.Provider value={value}>{children}</NutritionContext.Provider>;
 }
