@@ -24,6 +24,7 @@ type NutritionContextValue = {
   loadDefaultMeals: (chickenFoodId: "chicken-18" | "chicken-23", mode?: "replace" | "append") => void;
   applyMealTemplate: (mealType: MealType, chickenFoodId: "chicken-18" | "chicken-23") => void;
   addEntry: (foodId: string, mealType: MealType) => void;
+  rotateMealFood: (mealType: MealType, foodIds: string[]) => void;
   updateEntryAmount: (entryId: string, amount: number) => void;
   removeEntry: (entryId: string) => void;
   addFood: (food: FoodItem) => void;
@@ -214,6 +215,36 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
         unit: food.unit,
       };
       updateSelectedLog((current) => ({ ...current, entries: [...current.entries, entry] }));
+    },
+    rotateMealFood: (mealType, foodIds) => {
+      const availableFoodIds = foodIds.filter((foodId) => foods.some((food) => food.id === foodId));
+      if (!availableFoodIds.length) return;
+
+      updateSelectedLog((current) => {
+        const currentEntry = current.entries.find((entry) => entry.mealType === mealType && availableFoodIds.includes(entry.foodId));
+        const currentIndex = currentEntry ? availableFoodIds.indexOf(currentEntry.foodId) : -1;
+        const nextFoodId = availableFoodIds[(currentIndex + 1) % availableFoodIds.length];
+        const nextFood = foods.find((food) => food.id === nextFoodId);
+        if (!nextFood) return current;
+
+        const nextEntry: MealEntry = {
+          id: currentEntry?.id ?? crypto.randomUUID(),
+          foodId: nextFoodId,
+          mealType,
+          amount: nextFood.baseAmount,
+          unit: nextFood.unit,
+          time: currentEntry?.time,
+        };
+
+        if (currentEntry) {
+          return {
+            ...current,
+            entries: current.entries.map((entry) => entry.id === currentEntry.id ? nextEntry : entry),
+          };
+        }
+
+        return { ...current, entries: [...current.entries, nextEntry] };
+      });
     },
     updateEntryAmount: (entryId, amount) =>
       updateSelectedLog((current) => ({

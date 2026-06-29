@@ -233,4 +233,14 @@ export const defaultFoods: FoodItem[] = [
     category: "단백질",
     favorite: true,
   },
+  {
+    id: "beef",
+    name: "소고기",
+    emoji: "🥩",
+    baseAmount: 100,
+    unit: "g",
+    nutrients: { calories: 210, carbs: 0, protein: 20, fat: 14, sugar: 0, sodium: 60 },
+    category: "단백질",
+    favorite: true,
+  },
 ];

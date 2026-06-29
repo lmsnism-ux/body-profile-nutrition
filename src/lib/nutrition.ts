@@ -15,6 +15,23 @@ export const targets: Record<DailyLog["dayType"], NutritionTarget> = {
   rest: { calories: 2000, carbs: 190, protein: 165, fat: 60, sugar: 50, sodium: 2000 },
 };
 
+export function targetForWeight(weightKg: number, dayType: DailyLog["dayType"]): NutritionTarget {
+  const safeWeight = weightKg > 0 ? weightKg : 82;
+  const protein = Math.round(safeWeight * 2);
+  const fat = Math.round(safeWeight * (dayType === "training" ? 0.65 : 0.7));
+  const calories = Math.round(safeWeight * (dayType === "training" ? 27 : 24));
+  const carbs = Math.max(80, Math.round((calories - protein * 4 - fat * 9) / 4));
+
+  return {
+    calories,
+    carbs,
+    protein,
+    fat,
+    sugar: 50,
+    sodium: 2000,
+  };
+}
+
 export function calculateEntryNutrition(entry: MealEntry, food?: FoodItem): Nutrients {
   if (!food) return emptyNutrients;
   const ratio = entry.amount / food.baseAmount;

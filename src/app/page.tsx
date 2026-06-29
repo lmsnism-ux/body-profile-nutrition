@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { addDays, koreanDate, todayKey } from "@/lib/date";
+import { addDays, koreanDate, monthDates, todayKey, weekDates } from "@/lib/date";
 import { mealTemplateSummaries } from "@/data/defaultMealTemplates";
-import { calculateDailyNutrition, calculateEntryNutrition, round, scoreDay } from "@/lib/nutrition";
+import { calculateDailyNutrition, calculateEntryNutrition, round, scoreDay, targetForWeight } from "@/lib/nutrition";
 import { NutritionProvider, useNutrition } from "@/store/NutritionProvider";
 import type { DailyLog, FoodItem, MealType, Nutrients, NutritionTarget, Unit } from "@/types/nutrition";
 
@@ -40,6 +40,14 @@ const tabItems: Array<{ id: TabId; label: string; icon: string }> = [
   { id: "meals", label: "식단", icon: "+" },
   { id: "analysis", label: "분석", icon: "↗" },
   { id: "foods", label: "음식", icon: "⌕" },
+];
+
+const coreMeals: MealType[] = ["아침", "점심", "간식", "저녁"];
+
+const rotationGroups = [
+  { label: "채소", emoji: "🥬", foodIds: ["cucumber", "cabbage", "frozen-vegetables", "cherry-tomato"] },
+  { label: "단백질", emoji: "🍗", foodIds: ["chicken-23", "chicken-thigh", "tofu", "boiled-egg", "beef"] },
+  { label: "과일", emoji: "🍎", foodIds: ["banana", "blueberry", "avocado", "apple"] },
 ];
 
 const emptyFoodForm: FoodForm = {
@@ -100,14 +108,17 @@ function NutritionApp() {
 }
 
 function HomeView({ goMeals }: { goMeals: () => void }) {
-  const { profile, log, selectedDate, selectDate, setDayType, setWeight, foods, nutritionTargets, loadDefaultMeals } = useNutrition();
+  const { profile, log, logsByDate, selectedDate, selectDate, setDayType, setWeight, foods, loadDefaultMeals } = useNutrition();
   const total = useMemo(() => calculateDailyNutrition(log.entries, foods), [foods, log.entries]);
-  const target = nutritionTargets[log.dayType];
+  const target = targetForWeight(log.weightKg, log.dayType);
   const hasDeviation = log.entries.some((entry) => entry.mealType === "이탈음식");
   const score = scoreDay(total, target, hasDeviation);
   const mealCount = log.entries.length;
-  const caloriePercent = Math.min(120, Math.round((total.calories / target.calories) * 100));
-  const dateOptions = useMemo(() => [-6, -5, -4, -3, -2, -1, 0].map((day) => addDays(todayKey(), day)), []);
+  const proteinPercent = Math.min(120, Math.round((total.protein / target.protein) * 100));
+  const dateOptions = useMemo(() => weekDates(todayKey()), []);
+  const previousWeight = useMemo(() => findPreviousWeight(logsByDate, selectedDate, log.weightKg || profile.currentWeightKg), [log.weightKg, logsByDate, profile.currentWeightKg, selectedDate]);
+  const weekSummary = useMemo(() => summarizePeriod(dateOptions, logsByDate, foods), [dateOptions, foods, logsByDate]);
+  const monthSummary = useMemo(() => summarizePeriod(monthDates(selectedDate), logsByDate, foods), [foods, logsByDate, selectedDate]);
 
   return (
     <section className="space-y-4">
@@ -121,14 +132,14 @@ function HomeView({ goMeals }: { goMeals: () => void }) {
 
       <div className="rounded-lg bg-[#111827] p-5 text-white shadow-xl shadow-slate-300">
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-sm font-bold text-slate-300">오늘 남은 칼로리</p>
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-slate-300">오늘 남은 단백질</p>
             <div className="mt-2 flex items-end gap-2">
-              <p className="text-5xl font-black tracking-normal">{round(Math.max(0, target.calories - total.calories))}</p>
-              <span className="pb-1.5 text-sm font-extrabold text-slate-300">kcal</span>
+              <p className="text-5xl font-black tracking-normal">{round(Math.max(0, target.protein - total.protein))}</p>
+              <span className="pb-1.5 text-sm font-extrabold text-slate-300">g</span>
             </div>
             <p className="mt-2 text-sm font-bold text-slate-300">
-              {round(total.calories)} / {target.calories} kcal · {caloriePercent}%
+              {round(total.protein)} / {target.protein}g · 체중 {round(log.weightKg)}kg 기준
             </p>
           </div>
           <ScoreDial score={score} />
@@ -136,13 +147,13 @@ function HomeView({ goMeals }: { goMeals: () => void }) {
         <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/12">
           <div
             className="h-full rounded-full bg-[#2DD4BF] transition-all duration-500"
-            style={{ width: `${Math.min(100, caloriePercent)}%` }}
+            style={{ width: `${Math.min(100, proteinPercent)}%` }}
           />
         </div>
         <div className="mt-5 grid grid-cols-3 gap-2">
+          <GoalTile label="칼로리" value={Math.max(0, target.calories - total.calories)} unit="kcal" tone="green" />
           <GoalTile label="단백질" value={Math.max(0, target.protein - total.protein)} unit="g" tone="violet" />
           <GoalTile label="탄수" value={Math.max(0, target.carbs - total.carbs)} unit="g" tone="blue" />
-          <GoalTile label="나트륨" value={Math.max(0, target.sodium - total.sodium)} unit="mg" tone="rose" />
         </div>
         <button
           onClick={() => {
@@ -155,24 +166,18 @@ function HomeView({ goMeals }: { goMeals: () => void }) {
         </button>
       </div>
 
+      <WeightControl key={selectedDate} weight={log.weightKg} previousWeight={previousWeight} heightCm={profile.heightCm} onChange={setWeight} />
+
+      <MealFlowOverview log={log} foods={foods} target={target} goMeals={goMeals} />
+
       <div className="grid grid-cols-2 gap-3">
-        <InfoCard label="오늘 체중">
-          <div className="flex items-end gap-1">
-            <input
-              aria-label="오늘 체중"
-              value={log.weightKg}
-              onChange={(event) => setWeight(Number(event.target.value))}
-              className="w-24 bg-transparent text-4xl font-black outline-none"
-              type="number"
-              step="0.1"
-              inputMode="decimal"
-            />
-            <span className="pb-1.5 text-sm font-bold text-[#7B8494]">kg</span>
-          </div>
-        </InfoCard>
         <InfoCard label="목표">
           <p className="text-4xl font-black">{profile.targetWeightKg}</p>
           <p className="mt-1 text-xs font-bold text-[#7B8494]">kg · 체지방 {profile.targetBodyFatPercent}%</p>
+        </InfoCard>
+        <InfoCard label="자동 목표">
+          <p className="text-4xl font-black">{target.protein}g</p>
+          <p className="mt-1 text-xs font-bold text-[#7B8494]">단백질 · {target.calories}kcal</p>
         </InfoCard>
       </div>
 
@@ -189,8 +194,10 @@ function HomeView({ goMeals }: { goMeals: () => void }) {
 
       <FocusNote total={total} target={target} hasDeviation={hasDeviation} />
 
+      <TrendPanel week={weekSummary} month={monthSummary} />
+
       <div className="space-y-2">
-        {(Object.keys(nutrientLabels) as NutrientKey[]).map((key) => (
+        {(["protein", "carbs", "fat", "calories"] as NutrientKey[]).map((key) => (
           <ProgressRow key={key} name={key} value={total[key]} target={target[key]} />
         ))}
       </div>
@@ -199,7 +206,7 @@ function HomeView({ goMeals }: { goMeals: () => void }) {
 }
 
 function MealsView() {
-  const { log, foods, loadDefaultMeals, applyMealTemplate, addEntry, updateEntryAmount, removeEntry } = useNutrition();
+  const { log, foods, loadDefaultMeals, applyMealTemplate, addEntry, rotateMealFood, updateEntryAmount, removeEntry } = useNutrition();
   const [chicken, setChicken] = useState<"chicken-18" | "chicken-23">("chicken-23");
   const [selectedMeal, setSelectedMeal] = useState<MealType>("아침");
   const favoriteFoods = foods.filter((food) => food.favorite);
@@ -273,6 +280,29 @@ function MealsView() {
         >
           {template.emoji} {selectedMeal} 템플릿 한 번에 적용
         </button>
+      </div>
+
+      <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-black">로테이션</h2>
+            <p className="mt-1 text-xs font-bold text-[#7B8494]">{selectedMeal}에 맞춰 같은 종류 음식만 바꿉니다</p>
+          </div>
+          <span className="rounded-md bg-[#ECFDF5] px-3 py-1.5 text-xs font-black text-[#047857]">한 번 터치</span>
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          {rotationGroups.map((group) => (
+            <button
+              key={group.label}
+              onClick={() => rotateMealFood(selectedMeal, group.foodIds)}
+              className="rounded-lg bg-[#F8FAFC] px-3 py-3 text-left ring-1 ring-slate-200 transition active:scale-[0.98]"
+            >
+              <p className="text-2xl">{group.emoji}</p>
+              <p className="mt-1 text-sm font-black">{group.label}</p>
+              <p className="mt-0.5 text-[0.68rem] font-bold text-[#7B8494]">다음 음식</p>
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
@@ -359,6 +389,166 @@ function MealsView() {
   );
 }
 
+function WeightControl({
+  weight,
+  previousWeight,
+  heightCm,
+  onChange,
+}: {
+  weight: number;
+  previousWeight: number;
+  heightCm: number;
+  onChange: (weight: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(weight || previousWeight));
+
+  function commit(value: string) {
+    const next = Number(value);
+    if (!Number.isFinite(next) || next <= 0) return;
+    const rounded = round(next);
+    setDraft(String(rounded));
+    onChange(rounded);
+  }
+
+  function step(delta: number) {
+    const base = Number(draft) || weight || previousWeight;
+    const next = round(Math.max(30, base + delta));
+    setDraft(String(next));
+    onChange(next);
+  }
+
+  return (
+    <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-black text-[#7B8494]">오늘 체중</p>
+          <p className="mt-1 text-sm font-bold text-[#7B8494]">키 {heightCm}cm 고정 · 전일 {round(previousWeight)}kg 기준</p>
+        </div>
+        <span className="rounded-md bg-[#F1F5F9] px-3 py-1.5 text-xs font-black text-[#566174]">0 방지</span>
+      </div>
+      <div className="mt-4 grid grid-cols-[3.25rem_1fr_3.25rem] items-center gap-2">
+        <AmountButton onClick={() => step(-0.1)}>-</AmountButton>
+        <div className="flex h-14 items-center rounded-lg bg-[#F8FAFC] px-3 ring-1 ring-slate-200">
+          <input
+            aria-label="오늘 체중"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onBlur={() => commit(draft)}
+            className="min-w-0 flex-1 bg-transparent text-center text-3xl font-black outline-none"
+            type="number"
+            step="0.1"
+            inputMode="decimal"
+          />
+          <span className="w-8 text-center text-sm font-bold text-[#7B8494]">kg</span>
+        </div>
+        <AmountButton onClick={() => step(0.1)}>+</AmountButton>
+      </div>
+    </div>
+  );
+}
+
+function MealFlowOverview({ log, foods, target, goMeals }: { log: DailyLog; foods: FoodItem[]; target: NutritionTarget; goMeals: () => void }) {
+  return (
+    <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-black">오늘 섭취 흐름</h2>
+          <p className="mt-1 text-xs font-bold text-[#7B8494]">아침부터 저녁까지 채워진 정도</p>
+        </div>
+        <button onClick={goMeals} className="rounded-md bg-[#111827] px-3 py-2 text-xs font-black text-white">
+          수정
+        </button>
+      </div>
+      <div className="mt-4 space-y-3">
+        {coreMeals.map((mealType) => {
+          const entries = log.entries.filter((entry) => entry.mealType === mealType);
+          const total = calculateDailyNutrition(entries, foods);
+          const percent = Math.min(100, Math.round((total.protein / Math.max(1, target.protein / 4)) * 100));
+          const summary = mealTemplateSummaries[mealType];
+
+          return (
+            <div key={mealType} className="grid grid-cols-[2.5rem_4rem_1fr_3.4rem] items-center gap-2">
+              <div className="grid h-10 w-10 place-items-center rounded-lg bg-[#F8FAFC] text-xl ring-1 ring-slate-200">{summary.emoji}</div>
+              <p className="text-sm font-black">{mealType}</p>
+              <div className="h-2 overflow-hidden rounded-full bg-[#E5EAF1]">
+                <div className="h-full rounded-full bg-[#7C3AED]" style={{ width: `${percent}%` }} />
+              </div>
+              <p className="text-right text-xs font-black text-[#566174]">{entries.length ? `${round(total.protein)}g` : "비어있음"}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+type PeriodSummary = {
+  days: number;
+  recorded: number;
+  avgWeight: number;
+  avgProtein: number;
+  proteinHit: number;
+  weights: Array<{ date: string; value: number }>;
+  proteins: Array<{ date: string; value: number }>;
+};
+
+function TrendPanel({ week, month }: { week: PeriodSummary; month: PeriodSummary }) {
+  return (
+    <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-black">누적 기록</h2>
+          <p className="mt-1 text-xs font-bold text-[#7B8494]">체중과 단백질 흐름을 주간·월간으로 봅니다</p>
+        </div>
+        <span className="rounded-md bg-[#EEF2FF] px-3 py-1.5 text-xs font-black text-[#4338CA]">그래프</span>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <TrendSummary title="이번 주" summary={week} />
+        <TrendSummary title="이번 달" summary={month} />
+      </div>
+      <div className="mt-4 space-y-3">
+        <MiniBars title="주간 체중" items={week.weights} unit="kg" />
+        <MiniBars title="주간 단백질" items={week.proteins} unit="g" />
+      </div>
+    </div>
+  );
+}
+
+function TrendSummary({ title, summary }: { title: string; summary: PeriodSummary }) {
+  return (
+    <div className="rounded-lg bg-[#F8FAFC] p-3">
+      <p className="text-xs font-black text-[#7B8494]">{title}</p>
+      <p className="mt-1 text-2xl font-black">{summary.recorded}/{summary.days}</p>
+      <p className="mt-1 text-xs font-bold text-[#7B8494]">
+        평균 {summary.avgWeight ? `${round(summary.avgWeight)}kg` : "-"} · 단백질 {summary.avgProtein ? `${round(summary.avgProtein)}g` : "-"}
+      </p>
+    </div>
+  );
+}
+
+function MiniBars({ title, items, unit }: { title: string; items: Array<{ date: string; value: number }>; unit: string }) {
+  const max = Math.max(...items.map((item) => item.value), 1);
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-xs font-black text-[#7B8494]">{title}</p>
+        <p className="text-xs font-bold text-[#7B8494]">{items.filter((item) => item.value > 0).length}일 기록</p>
+      </div>
+      <div className="grid grid-cols-7 items-end gap-1">
+        {items.map((item) => (
+          <div key={item.date} className="text-center">
+            <div className="flex h-16 items-end rounded-md bg-[#EEF2F7] px-1">
+              <div className="w-full rounded-md bg-[#111827]" style={{ height: `${item.value ? Math.max(12, (item.value / max) * 100) : 0}%` }} />
+            </div>
+            <p className="mt-1 text-[0.62rem] font-black text-[#7B8494]">{item.value ? `${round(item.value)}${unit}` : "-"}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function AnalysisView() {
   const { logsByDate, foods, nutritionTargets, updateTarget } = useNutrition();
   const today = todayKey();
@@ -366,7 +556,7 @@ function AnalysisView() {
   const summaries = days.map((date) => {
     const log = logsByDate[date] ?? createDisplayLog(date);
     const total = calculateDailyNutrition(log.entries, foods);
-    const target = nutritionTargets[log.dayType];
+    const target = targetForWeight(log.weightKg, log.dayType);
     return {
       date,
       log,
@@ -643,11 +833,9 @@ function MealSwitcher({
   foods: FoodItem[];
   onSelect: (mealType: MealType) => void;
 }) {
-  const visibleMeals: MealType[] = ["아침", "점심", "간식", "저녁"];
-
   return (
     <div className="grid grid-cols-4 gap-2">
-      {visibleMeals.map((mealType) => {
+      {coreMeals.map((mealType) => {
         const mealEntries = entries.filter((entry) => entry.mealType === mealType);
         const total = calculateDailyNutrition(mealEntries, foods);
         const summary = mealTemplateSummaries[mealType];
@@ -675,17 +863,17 @@ function MealSwitcher({
 
 function DateRail({ dates, selectedDate, onSelect }: { dates: string[]; selectedDate: string; onSelect: (date: string) => void }) {
   return (
-    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+    <div className="grid grid-cols-7 gap-1">
       {dates.map((date) => (
         <button
           key={date}
           onClick={() => onSelect(date)}
-          className={`min-w-[4.5rem] rounded-lg px-3 py-2 text-left shadow-sm transition ${
+          className={`min-h-16 rounded-lg px-1 py-2 text-center shadow-sm transition ${
             selectedDate === date ? "bg-[#111827] text-white" : "bg-white text-[#7B8494] ring-1 ring-slate-200"
           }`}
         >
-          <p className="text-xs font-extrabold">{date === todayKey() ? "오늘" : koreanDate(date).split(" ")[1]}</p>
-          <p className="mt-0.5 text-lg font-black">{date.slice(8)}</p>
+          <p className="text-[0.63rem] font-extrabold">{date === todayKey() ? "오늘" : weekdayLabel(date)}</p>
+          <p className="mt-1 text-base font-black">{Number(date.slice(8))}</p>
         </button>
       ))}
     </div>
@@ -895,11 +1083,12 @@ function NumberField({ label, value, onChange, unit }: { label: string; value: n
   );
 }
 
-function GoalTile({ label, value, unit, tone }: { label: string; value: number; unit: string; tone: "violet" | "blue" | "rose" }) {
+function GoalTile({ label, value, unit, tone }: { label: string; value: number; unit: string; tone: "violet" | "blue" | "rose" | "green" }) {
   const toneClass = {
     violet: "bg-[#F5F3FF] text-[#6D28D9]",
     blue: "bg-[#EFF6FF] text-[#1D4ED8]",
     rose: "bg-[#FFF1F2] text-[#BE123C]",
+    green: "bg-[#ECFDF5] text-[#047857]",
   }[tone];
 
   return (
@@ -998,6 +1187,43 @@ function stepFor(unit: string) {
 
 function normalizeSearch(value: string) {
   return value.toLowerCase().replace(/\s/g, "");
+}
+
+function weekdayLabel(date: string) {
+  return new Intl.DateTimeFormat("ko-KR", { weekday: "short" }).format(new Date(`${date}T00:00:00`));
+}
+
+function findPreviousWeight(logsByDate: Record<string, DailyLog>, selectedDate: string, fallback: number) {
+  const previous = Object.values(logsByDate)
+    .filter((log) => log.date < selectedDate && log.weightKg > 0)
+    .sort((a, b) => b.date.localeCompare(a.date))[0];
+  return previous?.weightKg ?? fallback;
+}
+
+function summarizePeriod(dates: string[], logsByDate: Record<string, DailyLog>, foods: FoodItem[]): PeriodSummary {
+  const items = dates.map((date) => {
+    const log = logsByDate[date];
+    const total = calculateDailyNutrition(log?.entries ?? [], foods);
+    return {
+      date,
+      weight: log?.weightKg && log.weightKg > 0 ? log.weightKg : 0,
+      protein: total.protein,
+      recorded: Boolean(log && (log.entries.length > 0 || log.weightKg > 0)),
+    };
+  });
+  const recorded = items.filter((item) => item.recorded);
+  const weights = items.filter((item) => item.weight > 0);
+  const proteins = items.filter((item) => item.protein > 0);
+
+  return {
+    days: dates.length,
+    recorded: recorded.length,
+    avgWeight: weights.length ? weights.reduce((sum, item) => sum + item.weight, 0) / weights.length : 0,
+    avgProtein: proteins.length ? proteins.reduce((sum, item) => sum + item.protein, 0) / proteins.length : 0,
+    proteinHit: proteins.filter((item) => item.protein >= targetForWeight(logsByDate[item.date]?.weightKg ?? 82, logsByDate[item.date]?.dayType ?? "training").protein * 0.9).length,
+    weights: items.slice(-7).map((item) => ({ date: item.date, value: item.weight })),
+    proteins: items.slice(-7).map((item) => ({ date: item.date, value: item.protein })),
+  };
 }
 
 function createDisplayLog(date: string): DailyLog {
