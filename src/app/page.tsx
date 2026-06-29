@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { addDays, koreanDate, todayKey } from "@/lib/date";
+import { mealTemplateSummaries } from "@/data/defaultMealTemplates";
 import { calculateDailyNutrition, calculateEntryNutrition, round, scoreDay } from "@/lib/nutrition";
 import { NutritionProvider, useNutrition } from "@/store/NutritionProvider";
 import type { DailyLog, FoodItem, MealType, Nutrients, NutritionTarget, Unit } from "@/types/nutrition";
@@ -10,6 +11,7 @@ type TabId = "home" | "meals" | "analysis" | "foods";
 type NutrientKey = keyof Omit<Nutrients, "fiber">;
 type FoodForm = {
   name: string;
+  emoji: string;
   brand: string;
   baseAmount: number;
   unit: Unit;
@@ -22,7 +24,6 @@ type FoodForm = {
   sodium: number;
 };
 
-const mealTypes: MealType[] = ["아침", "점심", "간식", "저녁", "추가섭취", "이탈음식"];
 const units: Unit[] = ["g", "ml", "개", "팩", "회", "줌"];
 
 const nutrientLabels: Record<NutrientKey, { label: string; unit: string; accent: string; limit?: boolean }> = {
@@ -43,6 +44,7 @@ const tabItems: Array<{ id: TabId; label: string; icon: string }> = [
 
 const emptyFoodForm: FoodForm = {
   name: "",
+  emoji: "🍽️",
   brand: "",
   baseAmount: 100,
   unit: "g",
@@ -197,16 +199,24 @@ function HomeView({ goMeals }: { goMeals: () => void }) {
 }
 
 function MealsView() {
-  const { log, foods, loadDefaultMeals, addEntry, updateEntryAmount, removeEntry } = useNutrition();
+  const { log, foods, loadDefaultMeals, applyMealTemplate, addEntry, updateEntryAmount, removeEntry } = useNutrition();
   const [chicken, setChicken] = useState<"chicken-18" | "chicken-23">("chicken-23");
+  const [selectedMeal, setSelectedMeal] = useState<MealType>("아침");
   const favoriteFoods = foods.filter((food) => food.favorite);
   const total = useMemo(() => calculateDailyNutrition(log.entries, foods), [foods, log.entries]);
+  const selectedEntries = log.entries.filter((entry) => entry.mealType === selectedMeal);
+  const selectedTotal = calculateDailyNutrition(selectedEntries, foods);
+  const template = mealTemplateSummaries[selectedMeal];
 
   function loadTemplate(mode: "replace" | "append") {
     if (mode === "replace" && log.entries.length > 0 && !window.confirm("현재 식단을 지우고 기본 식단으로 바꿀까요?")) {
       return;
     }
     loadDefaultMeals(chicken, mode);
+  }
+
+  function addCurrentMealTemplate() {
+    applyMealTemplate(selectedMeal, chicken);
   }
 
   return (
@@ -224,16 +234,16 @@ function MealsView() {
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button
-            onClick={() => loadTemplate("append")}
+            onClick={addCurrentMealTemplate}
             className="h-12 rounded-lg bg-[#111827] text-sm font-black text-white transition active:scale-[0.99]"
           >
-            기본 식단 추가
+            {selectedMeal} 템플릿 적용
           </button>
           <button
             onClick={() => loadTemplate("replace")}
             className="h-12 rounded-lg bg-[#EEF2F7] text-sm font-black text-[#111827] transition active:scale-[0.99]"
           >
-            전체 교체
+            하루 전체 세팅
           </button>
         </div>
         <div className="mt-4 grid grid-cols-3 gap-2 text-center">
@@ -243,86 +253,108 @@ function MealsView() {
         </div>
       </div>
 
-      {mealTypes.map((mealType) => {
-        const entries = log.entries.filter((entry) => entry.mealType === mealType);
-        const mealTotal = calculateDailyNutrition(entries, foods);
+      <MealSwitcher selectedMeal={selectedMeal} entries={log.entries} foods={foods} onSelect={setSelectedMeal} />
 
-        return (
-          <div key={mealType} className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-xl font-black">{mealType}</h2>
-                <p className="mt-0.5 text-xs font-bold text-[#7B8494]">
-                  {entries.length ? `${round(mealTotal.calories)}kcal · 단백질 ${round(mealTotal.protein)}g` : "미입력"}
-                </p>
-              </div>
-              <select
-                aria-label={`${mealType} 음식 추가`}
-                className="max-w-36 rounded-lg bg-[#F1F5F9] px-3 py-3 text-sm font-extrabold text-[#111827] outline-none"
-                defaultValue=""
-                onChange={(event) => {
-                  if (event.target.value) addEntry(event.target.value, mealType);
-                  event.target.value = "";
-                }}
-              >
-                <option value="">+ 추가</option>
-                {favoriteFoods.map((food) => (
-                  <option key={food.id} value={food.id}>
-                    {food.name}
-                  </option>
-                ))}
-              </select>
+      <div className="rounded-lg bg-[#111827] p-4 text-white shadow-xl shadow-slate-300">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-black text-slate-300">{template.emoji} {template.title}</p>
+            <h2 className="mt-1 text-2xl font-black">{selectedMeal} 빠른 추가</h2>
+            <p className="mt-1 text-sm font-bold text-slate-300">{template.subtitle}</p>
+          </div>
+          <div className="rounded-lg bg-white/10 px-3 py-2 text-right">
+            <p className="text-xs font-black text-slate-300">현재</p>
+            <p className="text-lg font-black">{round(selectedTotal.calories)}kcal</p>
+          </div>
+        </div>
+        <button
+          onClick={addCurrentMealTemplate}
+          className="mt-4 h-14 w-full rounded-lg bg-white text-base font-black text-[#111827] transition active:scale-[0.99]"
+        >
+          {template.emoji} {selectedMeal} 템플릿 한 번에 적용
+        </button>
+      </div>
+
+      <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-black">{selectedMeal} 기록</h2>
+            <p className="mt-0.5 text-xs font-bold text-[#7B8494]">
+              {selectedEntries.length ? `${round(selectedTotal.calories)}kcal · 단백질 ${round(selectedTotal.protein)}g` : "아직 비어 있어요"}
+            </p>
+          </div>
+          <select
+            aria-label={`${selectedMeal} 음식 추가`}
+            className="max-w-36 rounded-lg bg-[#F1F5F9] px-3 py-3 text-sm font-extrabold text-[#111827] outline-none"
+            defaultValue=""
+            onChange={(event) => {
+              if (event.target.value) addEntry(event.target.value, selectedMeal);
+              event.target.value = "";
+            }}
+          >
+            <option value="">음식 추가</option>
+            {favoriteFoods.map((food) => (
+              <option key={food.id} value={food.id}>
+                {food.emoji ? `${food.emoji} ` : ""}{food.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="mt-4 space-y-2">
+          {selectedEntries.length === 0 && (
+            <div className="rounded-lg border border-dashed border-slate-300 bg-[#F8FAFC] px-4 py-6 text-center">
+              <p className="text-3xl">{template.emoji}</p>
+              <p className="mt-2 text-sm font-black text-[#111827]">{selectedMeal} 템플릿을 한 번 눌러 시작하세요</p>
+              <p className="mt-1 text-xs font-bold text-[#7B8494]">나중에 음식별 양만 조정하면 됩니다</p>
             </div>
-
-            <div className="mt-4 space-y-2">
-              {entries.length === 0 && (
-                <div className="rounded-lg border border-dashed border-slate-300 bg-[#F8FAFC] px-4 py-5 text-center text-sm font-bold text-[#7B8494]">
-                  음식 추가 버튼으로 기록하세요
-                </div>
-              )}
-              {entries.map((entry) => {
-                const food = foods.find((item) => item.id === entry.foodId);
-                const nutrition = calculateEntryNutrition(entry, food);
-                return (
-                  <div key={entry.id} className="rounded-lg bg-[#F8FAFC] p-3 ring-1 ring-slate-100">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-base font-black">{food?.name ?? "삭제된 음식"}</p>
-                        <p className="mt-1 text-xs font-bold text-[#7B8494]">
-                          {entry.time ? `${entry.time} · ` : ""}
-                          {round(nutrition.calories)}kcal · 단백질 {round(nutrition.protein)}g
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => removeEntry(entry.id)}
-                        className="rounded-md bg-[#FFF1F2] px-3 py-1.5 text-xs font-black text-[#E11D48]"
-                      >
-                        삭제
-                      </button>
+          )}
+          {selectedEntries.map((entry) => {
+            const food = foods.find((item) => item.id === entry.foodId);
+            const nutrition = calculateEntryNutrition(entry, food);
+            return (
+              <div key={entry.id} className="rounded-lg bg-[#F8FAFC] p-3 ring-1 ring-slate-100">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 gap-3">
+                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-white text-2xl shadow-sm ring-1 ring-slate-200">
+                      {food?.emoji ?? "🍽️"}
                     </div>
-                    <div className="mt-3 grid grid-cols-[2.75rem_1fr_2.75rem] items-center gap-2">
-                      <AmountButton onClick={() => updateEntryAmount(entry.id, entry.amount - stepFor(entry.unit))}>-</AmountButton>
-                      <div className="flex h-12 items-center rounded-lg bg-white px-3 ring-1 ring-slate-200">
-                        <input
-                          aria-label={`${food?.name ?? "음식"} 섭취량`}
-                          className="min-w-0 flex-1 bg-transparent text-center text-xl font-black outline-none"
-                          type="number"
-                          value={entry.amount}
-                          step={stepFor(entry.unit)}
-                          inputMode="decimal"
-                          onChange={(event) => updateEntryAmount(entry.id, Number(event.target.value))}
-                        />
-                        <span className="w-8 text-center text-sm font-bold text-[#7B8494]">{entry.unit}</span>
-                      </div>
-                      <AmountButton onClick={() => updateEntryAmount(entry.id, entry.amount + stepFor(entry.unit))}>+</AmountButton>
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-black">{food?.name ?? "삭제된 음식"}</p>
+                      <p className="mt-1 text-xs font-bold text-[#7B8494]">
+                        {entry.time ? `${entry.time} · ` : ""}
+                        {round(nutrition.calories)}kcal · 단백질 {round(nutrition.protein)}g
+                      </p>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
+                  <button
+                    onClick={() => removeEntry(entry.id)}
+                    className="rounded-md bg-[#FFF1F2] px-3 py-1.5 text-xs font-black text-[#E11D48]"
+                  >
+                    삭제
+                  </button>
+                </div>
+                <div className="mt-3 grid grid-cols-[2.75rem_1fr_2.75rem] items-center gap-2">
+                  <AmountButton onClick={() => updateEntryAmount(entry.id, entry.amount - stepFor(entry.unit))}>-</AmountButton>
+                  <div className="flex h-12 items-center rounded-lg bg-white px-3 ring-1 ring-slate-200">
+                    <input
+                      aria-label={`${food?.name ?? "음식"} 섭취량`}
+                      className="min-w-0 flex-1 bg-transparent text-center text-xl font-black outline-none"
+                      type="number"
+                      value={entry.amount}
+                      step={stepFor(entry.unit)}
+                      inputMode="decimal"
+                      onChange={(event) => updateEntryAmount(entry.id, Number(event.target.value))}
+                    />
+                    <span className="w-8 text-center text-sm font-bold text-[#7B8494]">{entry.unit}</span>
+                  </div>
+                  <AmountButton onClick={() => updateEntryAmount(entry.id, entry.amount + stepFor(entry.unit))}>+</AmountButton>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </section>
   );
 }
@@ -455,6 +487,7 @@ function FoodsView() {
     const nextFood: FoodItem = {
       id: editingFoodId ?? crypto.randomUUID(),
       name: form.name.trim(),
+      emoji: form.emoji.trim() || "🍽️",
       brand: form.brand.trim() || undefined,
       baseAmount: form.baseAmount,
       unit: form.unit,
@@ -521,6 +554,7 @@ function FoodsView() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <TextField label="음식명" value={form.name} onChange={(value) => updateForm("name", value)} />
+            <TextField label="이모지" value={form.emoji} onChange={(value) => updateForm("emoji", value)} />
             <TextField label="브랜드" value={form.brand} onChange={(value) => updateForm("brand", value)} />
             <NumberField label="기준량" value={form.baseAmount} onChange={(value) => updateForm("baseAmount", value)} />
             <label className="block">
@@ -580,6 +614,47 @@ function AppHeader({ eyebrow, title, aside }: { eyebrow: string; title: string; 
         {aside}
       </span>
     </header>
+  );
+}
+
+function MealSwitcher({
+  selectedMeal,
+  entries,
+  foods,
+  onSelect,
+}: {
+  selectedMeal: MealType;
+  entries: DailyLog["entries"];
+  foods: FoodItem[];
+  onSelect: (mealType: MealType) => void;
+}) {
+  const visibleMeals: MealType[] = ["아침", "점심", "간식", "저녁"];
+
+  return (
+    <div className="grid grid-cols-4 gap-2">
+      {visibleMeals.map((mealType) => {
+        const mealEntries = entries.filter((entry) => entry.mealType === mealType);
+        const total = calculateDailyNutrition(mealEntries, foods);
+        const summary = mealTemplateSummaries[mealType];
+        const active = selectedMeal === mealType;
+
+        return (
+          <button
+            key={mealType}
+            onClick={() => onSelect(mealType)}
+            className={`min-h-[5.75rem] rounded-lg p-2 text-left shadow-sm transition active:scale-[0.98] ${
+              active ? "bg-[#111827] text-white" : "bg-white text-[#111827] ring-1 ring-slate-200"
+            }`}
+          >
+            <p className="text-2xl">{summary.emoji}</p>
+            <p className="mt-1 text-sm font-black">{mealType}</p>
+            <p className={`mt-0.5 text-[0.68rem] font-black ${active ? "text-slate-300" : "text-[#7B8494]"}`}>
+              {mealEntries.length ? `${round(total.calories)}kcal` : "비어있음"}
+            </p>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -758,6 +833,7 @@ function FoodCard({ food, onEdit }: { food: FoodItem; onEdit: () => void }) {
 function foodToForm(food: FoodItem): FoodForm {
   return {
     name: food.name,
+    emoji: food.emoji ?? "🍽️",
     brand: food.brand ?? "",
     baseAmount: food.baseAmount,
     unit: food.unit,

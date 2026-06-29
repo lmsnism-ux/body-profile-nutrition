@@ -4,6 +4,7 @@ export const defaultFoods: FoodItem[] = [
   {
     id: "greek-yogurt",
     name: "그릭요거트",
+    emoji: "🥣",
     baseAmount: 90,
     unit: "g",
     nutrients: { calories: 61, carbs: 5, sugar: 1.7, fat: 1.9, protein: 6, sodium: 50 },
@@ -13,6 +14,7 @@ export const defaultFoods: FoodItem[] = [
   {
     id: "maeil-soy",
     name: "매일 두유",
+    emoji: "🥛",
     brand: "매일",
     baseAmount: 190,
     unit: "ml",
@@ -23,6 +25,7 @@ export const defaultFoods: FoodItem[] = [
   {
     id: "chicken-18",
     name: "닭가슴살 18g 제품",
+    emoji: "🍗",
     baseAmount: 1,
     unit: "팩",
     nutrients: { calories: 110, carbs: 2, sugar: 1, fat: 2, protein: 18, sodium: 350 },
@@ -32,6 +35,7 @@ export const defaultFoods: FoodItem[] = [
   {
     id: "chicken-23",
     name: "닭가슴살 23g 제품",
+    emoji: "🍗",
     baseAmount: 1,
     unit: "팩",
     nutrients: { calories: 135, carbs: 2, sugar: 1, fat: 2.5, protein: 23, sodium: 420 },
@@ -41,6 +45,7 @@ export const defaultFoods: FoodItem[] = [
   {
     id: "boiled-egg",
     name: "삶은 계란",
+    emoji: "🥚",
     baseAmount: 1,
     unit: "개",
     nutrients: { calories: 70, carbs: 0.4, protein: 6, fat: 5 },
@@ -50,6 +55,7 @@ export const defaultFoods: FoodItem[] = [
   {
     id: "apple",
     name: "사과",
+    emoji: "🍎",
     baseAmount: 1,
     unit: "개",
     nutrients: { calories: 95, carbs: 25, protein: 0.5, fat: 0.3, sugar: 19, sodium: 2, fiber: 4.4 },
@@ -59,6 +65,7 @@ export const defaultFoods: FoodItem[] = [
   {
     id: "nuts",
     name: "견과류",
+    emoji: "🥜",
     baseAmount: 20,
     unit: "g",
     nutrients: { calories: 120, carbs: 4, protein: 4, fat: 11, sugar: 1, sodium: 1, fiber: 2 },
@@ -68,6 +75,7 @@ export const defaultFoods: FoodItem[] = [
   {
     id: "banana",
     name: "바나나",
+    emoji: "🍌",
     baseAmount: 1,
     unit: "개",
     nutrients: { calories: 100, carbs: 27, protein: 1, fat: 0.3, sugar: 14, sodium: 1, fiber: 3 },
@@ -77,6 +85,7 @@ export const defaultFoods: FoodItem[] = [
   {
     id: "protein-shake",
     name: "프로틴 쉐이크",
+    emoji: "💪",
     baseAmount: 1,
     unit: "회",
     nutrients: { calories: 115, carbs: 3, sugar: 1, fat: 1.5, protein: 20, sodium: 120 },
@@ -86,6 +95,7 @@ export const defaultFoods: FoodItem[] = [
   {
     id: "mixed-rice",
     name: "잡곡밥",
+    emoji: "🍚",
     baseAmount: 100,
     unit: "g",
     nutrients: { calories: 155, carbs: 32, protein: 2.5, fat: 0.5, sugar: 0.1, sodium: 3, fiber: 1.5 },
@@ -95,6 +105,7 @@ export const defaultFoods: FoodItem[] = [
   {
     id: "seaweed",
     name: "김",
+    emoji: "⬛",
     baseAmount: 4,
     unit: "g",
     nutrients: { calories: 15, carbs: 1, protein: 1, fat: 1, sugar: 0, sodium: 70 },
@@ -104,6 +115,7 @@ export const defaultFoods: FoodItem[] = [
   {
     id: "cherry-tomato",
     name: "방울토마토",
+    emoji: "🍅",
     baseAmount: 1,
     unit: "줌",
     nutrients: { calories: 20, carbs: 4, protein: 1, fat: 0.2, sugar: 2.6, sodium: 8, fiber: 1.2 },
@@ -113,6 +125,7 @@ export const defaultFoods: FoodItem[] = [
   {
     id: "creatine",
     name: "크레아틴",
+    emoji: "⚡",
     baseAmount: 1,
     unit: "회",
     nutrients: { calories: 0, carbs: 0, protein: 0, fat: 0, sugar: 0, sodium: 0 },
@@ -122,6 +135,7 @@ export const defaultFoods: FoodItem[] = [
   {
     id: "zero-drink",
     name: "제로맥주 또는 제로음료",
+    emoji: "🥤",
     baseAmount: 1,
     unit: "개",
     nutrients: { calories: 15, carbs: 3, protein: 0, fat: 0, sugar: 0, sodium: 20 },

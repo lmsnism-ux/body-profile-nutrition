@@ -33,6 +33,7 @@ export type NutritionTarget = Omit<Nutrients, "fiber">;
 export type FoodItem = {
   id: string;
   name: string;
+  emoji?: string;
   brand?: string;
   baseAmount: number;
   unit: Unit;

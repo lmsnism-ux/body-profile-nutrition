@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { defaultFoods } from "@/data/defaultFoods";
-import { createDefaultMealTemplate } from "@/data/defaultMealTemplates";
+import { createDefaultMealTemplate, createMealTemplate } from "@/data/defaultMealTemplates";
 import { todayKey } from "@/lib/date";
 import { targets } from "@/lib/nutrition";
 import type { DailyLog, DailyLogsByDate, FoodItem, GroceryItem, MealEntry, MealType, NutritionTarget, UserProfile } from "@/types/nutrition";
@@ -22,6 +22,7 @@ type NutritionContextValue = {
   setWeight: (weightKg: number) => void;
   updateTarget: (dayType: DailyLog["dayType"], key: keyof NutritionTarget, value: number) => void;
   loadDefaultMeals: (chickenFoodId: "chicken-18" | "chicken-23", mode?: "replace" | "append") => void;
+  applyMealTemplate: (mealType: MealType, chickenFoodId: "chicken-18" | "chicken-23") => void;
   addEntry: (foodId: string, mealType: MealType) => void;
   updateEntryAmount: (entryId: string, amount: number) => void;
   removeEntry: (entryId: string) => void;
@@ -92,7 +93,7 @@ function readInitialState(): StoredNutritionState {
       selectedDate?: string;
       nutritionTargets?: NutritionTargetsByDay;
     };
-    const foods = parsed.foods?.length ? parsed.foods : defaultFoods;
+    const foods = parsed.foods?.length ? mergeDefaultFoodMetadata(parsed.foods) : defaultFoods;
     const nutritionTargets = parsed.nutritionTargets ?? targets;
 
     if (parsed.logsByDate && Object.keys(parsed.logsByDate).length) {
@@ -120,6 +121,22 @@ function readInitialState(): StoredNutritionState {
   }
 
   return fallback;
+}
+
+function mergeDefaultFoodMetadata(foods: FoodItem[]) {
+  return foods.map((food) => {
+    const defaultFood = defaultFoods.find((item) => item.id === food.id);
+    if (!defaultFood) return food;
+
+    return {
+      ...food,
+      emoji: food.emoji ?? defaultFood.emoji,
+      nutrients: {
+        ...defaultFood.nutrients,
+        ...food.nutrients,
+      },
+    };
+  });
 }
 
 export function NutritionProvider({ children }: { children: React.ReactNode }) {
@@ -172,6 +189,14 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
         const template = createDefaultMealTemplate(chickenFoodId);
         return { ...current, entries: mode === "append" ? [...current.entries, ...template] : template };
       }),
+    applyMealTemplate: (mealType, chickenFoodId) =>
+      updateSelectedLog((current) => ({
+        ...current,
+        entries: [
+          ...current.entries.filter((entry) => entry.mealType !== mealType),
+          ...createMealTemplate(mealType, chickenFoodId),
+        ],
+      })),
     addEntry: (foodId, mealType) => {
       const food = foods.find((item) => item.id === foodId);
       if (!food) return;
