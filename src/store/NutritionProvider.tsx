@@ -2,10 +2,10 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { defaultFoods } from "@/data/defaultFoods";
-import { createDefaultMealTemplate, createMealTemplate } from "@/data/defaultMealTemplates";
+import { cloneDefaultMealTemplates, createDefaultMealTemplate, createMealTemplate } from "@/data/defaultMealTemplates";
 import { todayKey } from "@/lib/date";
 import { targets } from "@/lib/nutrition";
-import type { DailyLog, DailyLogsByDate, FoodItem, GroceryItem, MealEntry, MealType, NutritionTarget, UserProfile } from "@/types/nutrition";
+import type { DailyLog, DailyLogsByDate, FoodItem, GroceryItem, MealEntry, MealTemplates, MealType, NutritionTarget, Unit, UserProfile } from "@/types/nutrition";
 
 type NutritionTargetsByDay = Record<DailyLog["dayType"], NutritionTarget>;
 
@@ -16,12 +16,17 @@ type NutritionContextValue = {
   logsByDate: DailyLogsByDate;
   selectedDate: string;
   nutritionTargets: NutritionTargetsByDay;
+  mealTemplates: MealTemplates;
   groceries: GroceryItem[];
   selectDate: (date: string) => void;
   setWeight: (weightKg: number) => void;
   updateTarget: (dayType: DailyLog["dayType"], key: keyof NutritionTarget, value: number) => void;
   loadDefaultMeals: (mode?: "replace" | "append") => void;
   applyMealTemplate: (mealType: MealType) => void;
+  updateMealTemplateFood: (mealType: MealType, index: number, foodId: string) => void;
+  updateMealTemplateAmount: (mealType: MealType, index: number, amount: number) => void;
+  addFoodToMealTemplate: (mealType: MealType, foodId: string) => void;
+  removeFoodFromMealTemplate: (mealType: MealType, index: number) => void;
   addEntry: (foodId: string, mealType: MealType) => void;
   rotateMealFood: (mealType: MealType, foodIds: string[]) => void;
   replaceMealFood: (mealType: MealType, currentFoodIds: string[], nextFoodId: string) => void;
@@ -57,12 +62,14 @@ const defaultGroceries: GroceryItem[] = [
 ];
 
 const NutritionContext = createContext<NutritionContextValue | null>(null);
+const storageKey = "bp-nutrition-mvp-v2";
 
 type StoredNutritionState = {
   foods: FoodItem[];
   logsByDate: DailyLogsByDate;
   selectedDate: string;
   nutritionTargets: NutritionTargetsByDay;
+  mealTemplates: MealTemplates;
 };
 
 function createEmptyLog(date: string, weightKg = 82): DailyLog {
@@ -80,11 +87,14 @@ function readInitialState(): StoredNutritionState {
     logsByDate: { [todayKey()]: defaultLog },
     selectedDate: todayKey(),
     nutritionTargets: targets,
+    mealTemplates: cloneDefaultMealTemplates(),
   };
 
   if (typeof window === "undefined") return fallback;
 
-  const saved = localStorage.getItem("bp-nutrition-mvp");
+  localStorage.removeItem("bp-nutrition-mvp");
+
+  const saved = localStorage.getItem(storageKey);
   if (!saved) return fallback;
 
   try {
@@ -94,9 +104,11 @@ function readInitialState(): StoredNutritionState {
       logsByDate?: DailyLogsByDate;
       selectedDate?: string;
       nutritionTargets?: NutritionTargetsByDay;
+      mealTemplates?: MealTemplates;
     };
     const foods = parsed.foods?.length ? mergeDefaultFoodMetadata(parsed.foods) : defaultFoods;
     const nutritionTargets = parsed.nutritionTargets ?? targets;
+    const mealTemplates = parsed.mealTemplates ?? cloneDefaultMealTemplates();
 
     if (parsed.logsByDate && Object.keys(parsed.logsByDate).length) {
       const selectedDate = todayKey();
@@ -108,6 +120,7 @@ function readInitialState(): StoredNutritionState {
         logsByDate,
         selectedDate,
         nutritionTargets,
+        mealTemplates,
       };
     }
 
@@ -120,6 +133,7 @@ function readInitialState(): StoredNutritionState {
         },
         selectedDate: parsed.log.date === todayKey() ? parsed.log.date : todayKey(),
         nutritionTargets,
+        mealTemplates,
       };
     }
   } catch {
@@ -143,6 +157,13 @@ function mergeDefaultFoodMetadata(foods: FoodItem[]) {
       },
     };
     if (food.id === "maeil-soy") {
+      return {
+        ...mergedFood,
+        name: defaultFood.name,
+        brand: defaultFood.brand,
+      };
+    }
+    if (food.id === "chicken-18" || food.id === "nuldam-protein-bread") {
       return {
         ...mergedFood,
         name: defaultFood.name,
@@ -173,6 +194,7 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
   const [selectedDate, setSelectedDate] = useState(initialState.selectedDate);
   const [logsByDate, setLogsByDate] = useState<DailyLogsByDate>(initialState.logsByDate);
   const [nutritionTargets, setNutritionTargets] = useState<NutritionTargetsByDay>(initialState.nutritionTargets);
+  const [mealTemplates, setMealTemplates] = useState<MealTemplates>(initialState.mealTemplates);
   const [groceries] = useState<GroceryItem[]>(defaultGroceries);
   const log = logsByDate[selectedDate] ?? createEmptyLog(selectedDate);
 
@@ -187,8 +209,8 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
   }, [selectedDate]);
 
   useEffect(() => {
-    localStorage.setItem("bp-nutrition-mvp", JSON.stringify({ foods, logsByDate, selectedDate, nutritionTargets }));
-  }, [foods, logsByDate, selectedDate, nutritionTargets]);
+    localStorage.setItem(storageKey, JSON.stringify({ foods, logsByDate, selectedDate, nutritionTargets, mealTemplates }));
+  }, [foods, logsByDate, mealTemplates, selectedDate, nutritionTargets]);
 
   const value = useMemo<NutritionContextValue>(() => ({
     profile,
@@ -197,6 +219,7 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
     logsByDate,
     selectedDate,
     nutritionTargets,
+    mealTemplates,
     groceries,
     selectDate: (date) => {
       setSelectedDate(date);
@@ -213,7 +236,7 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
       })),
     loadDefaultMeals: (mode = "replace") =>
       updateSelectedLog((current) => {
-        const template = createDefaultMealTemplate();
+        const template = createDefaultMealTemplate(mealTemplates);
         return { ...current, entries: mode === "append" ? [...current.entries, ...template] : template };
       }),
     applyMealTemplate: (mealType) =>
@@ -221,8 +244,38 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
         ...current,
         entries: [
           ...current.entries.filter((entry) => entry.mealType !== mealType),
-          ...createMealTemplate(mealType),
+          ...createMealTemplate(mealType, mealTemplates),
         ],
+      })),
+    updateMealTemplateFood: (mealType, index, foodId) => {
+      const food = foods.find((item) => item.id === foodId);
+      if (!food) return;
+      setMealTemplates((current) => ({
+        ...current,
+        [mealType]: (current[mealType] ?? []).map((item, itemIndex) =>
+          itemIndex === index ? { foodId, amount: food.baseAmount, unit: food.unit } : item,
+        ),
+      }));
+    },
+    updateMealTemplateAmount: (mealType, index, amount) =>
+      setMealTemplates((current) => ({
+        ...current,
+        [mealType]: (current[mealType] ?? []).map((item, itemIndex) =>
+          itemIndex === index ? { ...item, amount: Math.max(0, amount) } : item,
+        ),
+      })),
+    addFoodToMealTemplate: (mealType, foodId) => {
+      const food = foods.find((item) => item.id === foodId);
+      if (!food) return;
+      setMealTemplates((current) => ({
+        ...current,
+        [mealType]: [...(current[mealType] ?? []), { foodId, amount: food.baseAmount, unit: food.unit as Unit }],
+      }));
+    },
+    removeFoodFromMealTemplate: (mealType, index) =>
+      setMealTemplates((current) => ({
+        ...current,
+        [mealType]: (current[mealType] ?? []).filter((_, itemIndex) => itemIndex !== index),
       })),
     addEntry: (foodId, mealType) => {
       const food = foods.find((item) => item.id === foodId);
@@ -300,7 +353,7 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
       updateSelectedLog((current) => ({ ...current, entries: current.entries.filter((entry) => entry.id !== entryId) })),
     addFood: (food) => setFoods((current) => [food, ...current]),
     updateFood: (food) => setFoods((current) => current.map((item) => item.id === food.id ? food : item)),
-  }), [foods, groceries, log, logsByDate, nutritionTargets, selectedDate, updateSelectedLog]);
+  }), [foods, groceries, log, logsByDate, mealTemplates, nutritionTargets, selectedDate, updateSelectedLog]);
 
   return <NutritionContext.Provider value={value}>{children}</NutritionContext.Provider>;
 }

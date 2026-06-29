@@ -1,4 +1,4 @@
-import type { MealEntry, MealType } from "@/types/nutrition";
+import type { MealEntry, MealTemplateItem, MealTemplates, MealType } from "@/types/nutrition";
 
 const id = (mealType: MealType, foodId: string) => `${mealType}-${foodId}-${crypto.randomUUID()}`;
 
@@ -18,12 +18,13 @@ export const mealTemplateSummaries: Record<MealType, { title: string; emoji: str
   이탈음식: { title: "이탈 기록", emoji: "🍕", subtitle: "정확히 기록하고 다음 끼니 조정" },
 };
 
-export const mealTemplatePlan: Partial<Record<MealType, Array<{ foodId: string; amount: number; unit: MealEntry["unit"] }>>> = {
+export const defaultMealTemplates: MealTemplates = {
   아침: [
     { foodId: "boiled-egg", amount: 3, unit: "개" },
     { foodId: "greek-yogurt", amount: 90, unit: "g" },
     { foodId: "maeil-soy", amount: 190, unit: "ml" },
     { foodId: "blueberry", amount: 100, unit: "g" },
+    { foodId: "banana", amount: 1, unit: "개" },
     { foodId: "nuts", amount: 20, unit: "g" },
   ],
   점심: [
@@ -42,7 +43,7 @@ export const mealTemplatePlan: Partial<Record<MealType, Array<{ foodId: string; 
     { foodId: "chicken-18", amount: 2, unit: "팩" },
     { foodId: "seaweed", amount: 4, unit: "g" },
     { foodId: "cherry-tomato", amount: 1, unit: "줌" },
-    { foodId: "zero-drink", amount: 1, unit: "개" },
+    { foodId: "avocado", amount: 100, unit: "g" },
   ],
 };
 
@@ -50,15 +51,24 @@ function entry(mealType: MealType, foodId: string, amount: number, unit: MealEnt
   return { id: id(mealType, foodId), mealType, foodId, amount, unit, time: mealTimes[mealType] };
 }
 
-export function createMealTemplate(mealType: MealType): MealEntry[] {
-  return (mealTemplatePlan[mealType] ?? []).map((item) => entry(mealType, item.foodId, item.amount, item.unit));
+export function createMealTemplate(mealType: MealType, templates: MealTemplates = defaultMealTemplates): MealEntry[] {
+  return (templates[mealType] ?? []).map((item) => entry(mealType, item.foodId, item.amount, item.unit));
 }
 
-export function createDefaultMealTemplate(): MealEntry[] {
+export function createDefaultMealTemplate(templates: MealTemplates = defaultMealTemplates): MealEntry[] {
   return [
-    ...createMealTemplate("아침"),
-    ...createMealTemplate("점심"),
-    ...createMealTemplate("간식"),
-    ...createMealTemplate("저녁"),
+    ...createMealTemplate("아침", templates),
+    ...createMealTemplate("점심", templates),
+    ...createMealTemplate("간식", templates),
+    ...createMealTemplate("저녁", templates),
   ];
+}
+
+export function cloneDefaultMealTemplates(): MealTemplates {
+  return Object.fromEntries(
+    Object.entries(defaultMealTemplates).map(([mealType, items]) => [
+      mealType,
+      (items as MealTemplateItem[]).map((item) => ({ ...item })),
+    ]),
+  ) as MealTemplates;
 }

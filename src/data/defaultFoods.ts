@@ -23,7 +23,7 @@ export const defaultFoods: FoodItem[] = [
   },
   {
     id: "chicken-18",
-    name: "닭가슴살 18g 제품",
+    name: "닭가슴살",
     emoji: "🍗",
     baseAmount: 1,
     unit: "팩",
@@ -203,9 +203,8 @@ export const defaultFoods: FoodItem[] = [
   },
   {
     id: "nuldam-protein-bread",
-    name: "널담 단백질빵",
+    name: "단백질빵",
     emoji: "🍞",
-    brand: "널담",
     baseAmount: 1,
     unit: "개",
     nutrients: { calories: 185, carbs: 21, protein: 12, fat: 6, sugar: 4, sodium: 260 },

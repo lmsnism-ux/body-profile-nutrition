@@ -51,6 +51,14 @@ export type MealEntry = {
   time?: string;
 };
 
+export type MealTemplateItem = {
+  foodId: string;
+  amount: number;
+  unit: Unit;
+};
+
+export type MealTemplates = Partial<Record<MealType, MealTemplateItem[]>>;
+
 export type DailyLog = {
   date: string;
   weightKg: number;

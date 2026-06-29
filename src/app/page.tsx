@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { addDays, koreanDate, monthDates, todayKey, weekDates } from "@/lib/date";
-import { mealTemplatePlan, mealTemplateSummaries } from "@/data/defaultMealTemplates";
+import { mealTemplateSummaries } from "@/data/defaultMealTemplates";
 import { calculateDailyNutrition, calculateEntryNutrition, round, scoreDay, targetForWeight } from "@/lib/nutrition";
 import { NutritionProvider, useNutrition } from "@/store/NutritionProvider";
-import type { DailyLog, FoodItem, MealType, Nutrients, NutritionTarget, Unit } from "@/types/nutrition";
+import type { DailyLog, FoodItem, MealTemplates, MealType, Nutrients, NutritionTarget, Unit } from "@/types/nutrition";
 
 type TabId = "home" | "meals" | "analysis" | "foods";
 type NutrientKey = keyof Omit<Nutrients, "fiber">;
@@ -125,8 +125,8 @@ function HomeView({ goMeals }: { goMeals: () => void }) {
   const proteinPercent = Math.min(120, Math.round((total.protein / target.protein) * 100));
   const dateOptions = useMemo(() => weekDates(todayKey()), []);
   const previousWeight = useMemo(() => findPreviousWeight(logsByDate, selectedDate, log.weightKg || profile.currentWeightKg), [log.weightKg, logsByDate, profile.currentWeightKg, selectedDate]);
-  const weekSummary = useMemo(() => summarizePeriod(dateOptions, logsByDate, foods), [dateOptions, foods, logsByDate]);
-  const monthSummary = useMemo(() => summarizePeriod(monthDates(selectedDate), logsByDate, foods), [foods, logsByDate, selectedDate]);
+  const weekSummary = useMemo(() => summarizePeriod(dateOptions, logsByDate, foods, selectedDate), [dateOptions, foods, logsByDate, selectedDate]);
+  const monthSummary = useMemo(() => summarizePeriod(monthDates(selectedDate), logsByDate, foods, selectedDate), [foods, logsByDate, selectedDate]);
 
   return (
     <section className="space-y-4">
@@ -200,7 +200,22 @@ function HomeView({ goMeals }: { goMeals: () => void }) {
 }
 
 function MealsView() {
-  const { log, foods, loadDefaultMeals, applyMealTemplate, addEntry, rotateMealFood, replaceMealFood, updateEntryAmount, removeEntry } = useNutrition();
+  const {
+    log,
+    foods,
+    mealTemplates,
+    loadDefaultMeals,
+    applyMealTemplate,
+    addEntry,
+    rotateMealFood,
+    replaceMealFood,
+    updateMealTemplateFood,
+    updateMealTemplateAmount,
+    addFoodToMealTemplate,
+    removeFoodFromMealTemplate,
+    updateEntryAmount,
+    removeEntry,
+  } = useNutrition();
   const [selectedMeal, setSelectedMeal] = useState<MealType>("아침");
   const favoriteFoods = foods.filter((food) => food.favorite);
   const total = useMemo(() => calculateDailyNutrition(log.entries, foods), [foods, log.entries]);
@@ -247,7 +262,15 @@ function MealsView() {
 
       <MealSwitcher selectedMeal={selectedMeal} entries={log.entries} foods={foods} onSelect={setSelectedMeal} />
 
-      <TemplatePreview mealType={selectedMeal} foods={foods} />
+      <TemplateEditor
+        mealType={selectedMeal}
+        foods={foods}
+        mealTemplates={mealTemplates}
+        onReplace={updateMealTemplateFood}
+        onAmount={updateMealTemplateAmount}
+        onAdd={addFoodToMealTemplate}
+        onRemove={removeFoodFromMealTemplate}
+      />
 
       <div className="rounded-lg bg-[#111827] p-4 text-white shadow-xl shadow-slate-300">
         <div className="flex items-start justify-between gap-3">
@@ -378,29 +401,93 @@ function MealsView() {
   );
 }
 
-function TemplatePreview({ mealType, foods }: { mealType: MealType; foods: FoodItem[] }) {
-  const plan = mealTemplatePlan[mealType] ?? [];
+function TemplateEditor({
+  mealType,
+  foods,
+  mealTemplates,
+  onReplace,
+  onAmount,
+  onAdd,
+  onRemove,
+}: {
+  mealType: MealType;
+  foods: FoodItem[];
+  mealTemplates: MealTemplates;
+  onReplace: (mealType: MealType, index: number, foodId: string) => void;
+  onAmount: (mealType: MealType, index: number, amount: number) => void;
+  onAdd: (mealType: MealType, foodId: string) => void;
+  onRemove: (mealType: MealType, index: number) => void;
+}) {
+  const plan = mealTemplates[mealType] ?? [];
+  const favoriteFoods = foods.filter((food) => food.favorite);
 
   return (
     <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-black">기본 템플릿 구성</h2>
-          <p className="mt-1 text-xs font-bold text-[#7B8494]">{mealType} 템플릿을 누르면 아래 음식이 들어갑니다</p>
+          <h2 className="text-xl font-black">기본 템플릿 편집</h2>
+          <p className="mt-1 text-xs font-bold text-[#7B8494]">바꾸면 다음 템플릿 적용부터 그대로 들어갑니다</p>
         </div>
-        <span className="rounded-md bg-[#F1F5F9] px-3 py-1.5 text-xs font-black text-[#566174]">닭 18g</span>
+        <select
+          aria-label={`${mealType} 템플릿 음식 추가`}
+          className="max-w-32 rounded-md bg-[#F1F5F9] px-2 py-2 text-xs font-black text-[#111827] outline-none"
+          defaultValue=""
+          onChange={(event) => {
+            if (event.target.value) onAdd(mealType, event.target.value);
+            event.target.value = "";
+          }}
+        >
+          <option value="">추가</option>
+          {favoriteFoods.map((food) => (
+            <option key={food.id} value={food.id}>
+              {food.name}
+            </option>
+          ))}
+        </select>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        {plan.map((item) => {
+      <div className="mt-3 space-y-2">
+        {plan.map((item, index) => {
           const food = foods.find((food) => food.id === item.foodId);
           return (
-            <div key={`${mealType}-${item.foodId}`} className="rounded-lg bg-[#F8FAFC] p-3 ring-1 ring-slate-200">
-              <p className="text-xl">{food?.emoji ?? "🍽️"}</p>
-              <p className="mt-1 truncate text-sm font-black">{food?.name ?? item.foodId}</p>
-              <p className="mt-0.5 text-xs font-bold text-[#7B8494]">
-                {item.amount}
-                {item.unit}
-              </p>
+            <div key={`${mealType}-${index}-${item.foodId}`} className="rounded-lg bg-[#F8FAFC] p-3 ring-1 ring-slate-200">
+              <div className="flex items-center gap-2">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white text-xl ring-1 ring-slate-200">
+                  {food?.emoji ?? "🍽️"}
+                </div>
+                <select
+                  aria-label={`${mealType} 템플릿 음식 교체`}
+                  value={item.foodId}
+                  onChange={(event) => onReplace(mealType, index, event.target.value)}
+                  className="min-w-0 flex-1 rounded-lg bg-white px-3 py-2 text-sm font-black text-[#111827] outline-none ring-1 ring-slate-200"
+                >
+                  {favoriteFoods.map((food) => (
+                    <option key={food.id} value={food.id}>
+                      {food.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => onRemove(mealType, index)}
+                  className="rounded-md bg-[#FFF1F2] px-3 py-2 text-xs font-black text-[#E11D48]"
+                >
+                  삭제
+                </button>
+              </div>
+              <div className="mt-2 grid grid-cols-[2.5rem_1fr_2.5rem] items-center gap-2">
+                <AmountButton onClick={() => onAmount(mealType, index, item.amount - stepFor(item.unit))}>-</AmountButton>
+                <div className="flex h-11 items-center rounded-lg bg-white px-3 ring-1 ring-slate-200">
+                  <input
+                    aria-label={`${food?.name ?? "음식"} 템플릿 기준량`}
+                    value={item.amount}
+                    type="number"
+                    inputMode="decimal"
+                    onChange={(event) => onAmount(mealType, index, Number(event.target.value))}
+                    className="min-w-0 flex-1 bg-transparent text-center text-lg font-black outline-none"
+                  />
+                  <span className="w-8 text-center text-xs font-bold text-[#7B8494]">{item.unit}</span>
+                </div>
+                <AmountButton onClick={() => onAmount(mealType, index, item.amount + stepFor(item.unit))}>+</AmountButton>
+              </div>
             </div>
           );
         })}
@@ -559,67 +646,84 @@ function MealFlowOverview({ log, foods, target, goMeals }: { log: DailyLog; food
 
 type PeriodSummary = {
   days: number;
-  recorded: number;
+  progressDays: number;
+  recordedDays: number;
   avgWeight: number;
-  avgProtein: number;
-  proteinHit: number;
   weights: Array<{ date: string; value: number }>;
   proteins: Array<{ date: string; value: number }>;
 };
 
 function TrendPanel({ week, month }: { week: PeriodSummary; month: PeriodSummary }) {
+  const [view, setView] = useState<"week" | "month">("week");
+  const summary = view === "week" ? week : month;
+  const title = view === "week" ? "이번 주" : "이번 달";
+
   return (
     <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-black">누적 기록</h2>
-          <p className="mt-1 text-xs font-bold text-[#7B8494]">체중과 단백질 흐름을 주간·월간으로 봅니다</p>
+          <p className="mt-1 text-xs font-bold text-[#7B8494]">월요일 기준 흐름만 간단히 봅니다</p>
         </div>
-        <span className="rounded-md bg-[#EEF2FF] px-3 py-1.5 text-xs font-black text-[#4338CA]">그래프</span>
+        <div className="grid grid-cols-2 gap-1 rounded-lg bg-[#F1F5F9] p-1">
+          <button
+            onClick={() => setView("week")}
+            className={`rounded-md px-3 py-2 text-xs font-black ${view === "week" ? "bg-white text-[#111827] shadow-sm" : "text-[#7B8494]"}`}
+          >
+            주간
+          </button>
+          <button
+            onClick={() => setView("month")}
+            className={`rounded-md px-3 py-2 text-xs font-black ${view === "month" ? "bg-white text-[#111827] shadow-sm" : "text-[#7B8494]"}`}
+          >
+            월간
+          </button>
+        </div>
       </div>
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <TrendSummary title="이번 주" summary={week} />
-        <TrendSummary title="이번 달" summary={month} />
-      </div>
-      <div className="mt-4 space-y-3">
-        <MiniBars title="주간 체중" items={week.weights} unit="kg" />
-        <MiniBars title="주간 단백질" items={week.proteins} unit="g" />
-        <MiniBars title="월간 체중" items={month.weights} unit="kg" />
-        <MiniBars title="월간 단백질" items={month.proteins} unit="g" />
+      <div className="mt-4 rounded-lg bg-[#F8FAFC] p-3 ring-1 ring-slate-200">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-black text-[#7B8494]">{title}</p>
+            <p className="mt-1 text-2xl font-black">
+              {summary.progressDays}/{summary.days}
+            </p>
+            <p className="mt-1 text-xs font-bold text-[#7B8494]">{view === "week" ? "월요일부터 오늘까지" : "이번 달 오늘까지"}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs font-black text-[#7B8494]">평균 체중</p>
+            <p className="mt-1 text-2xl font-black">{summary.avgWeight ? `${round(summary.avgWeight)}kg` : "-"}</p>
+          </div>
+        </div>
+        <div className="mt-4 space-y-3">
+          <CompactBars title="체중" items={summary.weights} unit="kg" tone="#111827" />
+          <CompactBars title="단백질" items={summary.proteins} unit="g" tone="#7C3AED" />
+        </div>
       </div>
     </div>
   );
 }
 
-function TrendSummary({ title, summary }: { title: string; summary: PeriodSummary }) {
-  return (
-    <div className="rounded-lg bg-[#F8FAFC] p-3">
-      <p className="text-xs font-black text-[#7B8494]">{title}</p>
-      <p className="mt-1 text-2xl font-black">{summary.recorded}/{summary.days}</p>
-      <p className="mt-1 text-xs font-bold text-[#7B8494]">
-        평균 {summary.avgWeight ? `${round(summary.avgWeight)}kg` : "-"} · 단백질 {summary.avgProtein ? `${round(summary.avgProtein)}g` : "-"}
-      </p>
-    </div>
-  );
-}
-
-function MiniBars({ title, items, unit }: { title: string; items: Array<{ date: string; value: number }>; unit: string }) {
+function CompactBars({ title, items, unit, tone }: { title: string; items: Array<{ date: string; value: number }>; unit: string; tone: string }) {
   const max = Math.max(...items.map((item) => item.value), 1);
+  const recorded = items.filter((item) => item.value > 0);
+  const latest = recorded.at(-1)?.value ?? 0;
 
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
         <p className="text-xs font-black text-[#7B8494]">{title}</p>
-        <p className="text-xs font-bold text-[#7B8494]">{items.filter((item) => item.value > 0).length}일 기록</p>
+        <p className="text-xs font-bold text-[#7B8494]">{latest ? `${round(latest)}${unit}` : "기록 없음"}</p>
       </div>
-      <div className="grid grid-cols-7 items-end gap-1">
+      <div className="flex h-14 items-end gap-1 rounded-lg bg-white px-2 py-2 ring-1 ring-slate-200">
         {items.map((item) => (
-          <div key={item.date} className="text-center">
-            <div className="flex h-16 items-end rounded-md bg-[#EEF2F7] px-1">
-              <div className="w-full rounded-md bg-[#111827]" style={{ height: `${item.value ? Math.max(12, (item.value / max) * 100) : 0}%` }} />
-            </div>
-            <p className="mt-1 text-[0.62rem] font-black text-[#7B8494]">{item.value ? `${round(item.value)}${unit}` : "-"}</p>
-          </div>
+          <div
+            key={item.date}
+            className="min-w-0 flex-1 rounded-sm"
+            style={{
+              height: `${item.value ? Math.max(8, (item.value / max) * 100) : 4}%`,
+              backgroundColor: item.value ? tone : "#E5EAF1",
+            }}
+          />
         ))}
       </div>
     </div>
@@ -1208,7 +1312,7 @@ function findPreviousWeight(logsByDate: Record<string, DailyLog>, selectedDate: 
   return previous?.weightKg ?? fallback;
 }
 
-function summarizePeriod(dates: string[], logsByDate: Record<string, DailyLog>, foods: FoodItem[]): PeriodSummary {
+function summarizePeriod(dates: string[], logsByDate: Record<string, DailyLog>, foods: FoodItem[], currentDate: string): PeriodSummary {
   const items = dates.map((date) => {
     const log = logsByDate[date];
     const total = calculateDailyNutrition(log?.entries ?? [], foods);
@@ -1221,14 +1325,13 @@ function summarizePeriod(dates: string[], logsByDate: Record<string, DailyLog>, 
   });
   const recorded = items.filter((item) => item.recorded);
   const weights = items.filter((item) => item.weight > 0);
-  const proteins = items.filter((item) => item.protein > 0);
+  const progressDays = Math.max(1, items.filter((item) => item.date <= currentDate).length);
 
   return {
     days: dates.length,
-    recorded: recorded.length,
+    progressDays,
+    recordedDays: recorded.length,
     avgWeight: weights.length ? weights.reduce((sum, item) => sum + item.weight, 0) / weights.length : 0,
-    avgProtein: proteins.length ? proteins.reduce((sum, item) => sum + item.protein, 0) / proteins.length : 0,
-    proteinHit: proteins.filter((item) => item.protein >= targetForWeight(logsByDate[item.date]?.weightKg ?? 82, logsByDate[item.date]?.dayType ?? "training").protein * 0.9).length,
     weights: items.map((item) => ({ date: item.date, value: item.weight })),
     proteins: items.map((item) => ({ date: item.date, value: item.protein })),
   };
