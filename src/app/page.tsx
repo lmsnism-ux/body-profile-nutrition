@@ -25,13 +25,13 @@ type FoodForm = {
 const mealTypes: MealType[] = ["아침", "점심", "간식", "저녁", "추가섭취", "이탈음식"];
 const units: Unit[] = ["g", "ml", "개", "팩", "회", "줌"];
 
-const nutrientLabels: Record<NutrientKey, { label: string; unit: string; color: string; limit?: boolean }> = {
-  calories: { label: "칼로리", unit: "kcal", color: "from-teal-300 to-cyan-200" },
-  carbs: { label: "탄수화물", unit: "g", color: "from-violet-300 to-fuchsia-300" },
-  protein: { label: "단백질", unit: "g", color: "from-sky-300 to-blue-300" },
-  fat: { label: "지방", unit: "g", color: "from-orange-300 to-amber-300" },
-  sugar: { label: "당류", unit: "g", color: "from-yellow-200 to-amber-300", limit: true },
-  sodium: { label: "나트륨", unit: "mg", color: "from-rose-300 to-red-300", limit: true },
+const nutrientLabels: Record<NutrientKey, { label: string; unit: string; accent: string; limit?: boolean }> = {
+  calories: { label: "칼로리", unit: "kcal", accent: "#0F766E" },
+  carbs: { label: "탄수화물", unit: "g", accent: "#2563EB" },
+  protein: { label: "단백질", unit: "g", accent: "#7C3AED" },
+  fat: { label: "지방", unit: "g", accent: "#F59E0B" },
+  sugar: { label: "당류", unit: "g", accent: "#E11D48", limit: true },
+  sodium: { label: "나트륨", unit: "mg", accent: "#DC2626", limit: true },
 };
 
 const tabItems: Array<{ id: TabId; label: string; icon: string }> = [
@@ -67,23 +67,23 @@ function NutritionApp() {
   const [tab, setTab] = useState<TabId>("home");
 
   return (
-    <main className="min-h-dvh bg-[#0B0F14] text-[#F5F7FA]">
-      <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col bg-[radial-gradient(circle_at_top,#17212B_0,#0B0F14_42%)]">
+    <main className="min-h-dvh bg-[#E9EEF5] text-[#151923]">
+      <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col bg-[#F7F9FC] shadow-2xl shadow-slate-300/60">
         <div className="flex-1 overflow-y-auto px-5 pb-28 pt-5">
           {tab === "home" && <HomeView goMeals={() => setTab("meals")} />}
           {tab === "meals" && <MealsView />}
           {tab === "analysis" && <AnalysisView />}
           {tab === "foods" && <FoodsView />}
         </div>
-        <nav className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md border-t border-white/10 bg-[#10151C]/90 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl">
-          <div className="grid grid-cols-4 gap-1 rounded-[1.15rem] bg-white/[0.04] p-1.5">
+        <nav className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md border-t border-slate-200 bg-white/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur-xl">
+          <div className="grid grid-cols-4 gap-1">
             {tabItems.map((item) => (
               <button
                 key={item.id}
                 onClick={() => setTab(item.id)}
                 aria-label={item.label}
-                className={`flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-2xl text-xs font-bold transition active:scale-[0.98] ${
-                  tab === item.id ? "bg-white text-[#111827] shadow-lg shadow-black/30" : "text-[#9CA3AF]"
+                className={`flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-lg text-xs font-extrabold transition active:scale-[0.98] ${
+                  tab === item.id ? "bg-[#111827] text-white shadow-lg shadow-slate-300" : "text-[#7B8494]"
                 }`}
               >
                 <span className="text-lg leading-none">{item.icon}</span>
@@ -108,65 +108,48 @@ function HomeView({ goMeals }: { goMeals: () => void }) {
   const dateOptions = useMemo(() => [-6, -5, -4, -3, -2, -1, 0].map((day) => addDays(todayKey(), day)), []);
 
   return (
-    <section className="space-y-5">
-      <header className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-sm font-medium text-[#9CA3AF]">{koreanDate(selectedDate)}</p>
-          <h1 className="mt-1 text-[2rem] font-black leading-tight tracking-normal">{profile.name}의 식단</h1>
-        </div>
-        <span className="rounded-full bg-[#5EEAD4]/15 px-3 py-1.5 text-xs font-bold text-[#5EEAD4]">
-          D-Body Profile
-        </span>
-      </header>
+    <section className="space-y-4">
+      <AppHeader
+        eyebrow={koreanDate(selectedDate)}
+        title={`${profile.name}의 식단`}
+        aside={`${log.dayType === "training" ? "운동일" : "휴식일"} 기준`}
+      />
 
-      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-        {dateOptions.map((date) => (
-          <button
-            key={date}
-            onClick={() => selectDate(date)}
-            className={`min-w-[4.8rem] rounded-2xl px-3 py-2 text-left transition ${
-              selectedDate === date ? "bg-white text-[#111827]" : "bg-[#151A21] text-[#9CA3AF]"
-            }`}
-          >
-            <p className="text-xs font-bold">{date === todayKey() ? "오늘" : koreanDate(date).split(" ")[1]}</p>
-            <p className="mt-0.5 text-lg font-black">{date.slice(8)}</p>
-          </button>
-        ))}
-      </div>
+      <DateRail dates={dateOptions} selectedDate={selectedDate} onSelect={selectDate} />
 
-      <div className="rounded-[1.5rem] bg-white p-5 text-[#111827] shadow-2xl shadow-black/30">
+      <div className="rounded-lg bg-[#111827] p-5 text-white shadow-xl shadow-slate-300">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-bold text-[#6B7280]">오늘 남은 칼로리</p>
-            <p className="mt-2 text-5xl font-black tracking-normal">{round(Math.max(0, target.calories - total.calories))}</p>
-            <p className="mt-1 text-sm font-semibold text-[#6B7280]">
+            <p className="text-sm font-bold text-slate-300">오늘 남은 칼로리</p>
+            <div className="mt-2 flex items-end gap-2">
+              <p className="text-5xl font-black tracking-normal">{round(Math.max(0, target.calories - total.calories))}</p>
+              <span className="pb-1.5 text-sm font-extrabold text-slate-300">kcal</span>
+            </div>
+            <p className="mt-2 text-sm font-bold text-slate-300">
               {round(total.calories)} / {target.calories} kcal · {caloriePercent}%
             </p>
           </div>
-          <div className="rounded-2xl bg-[#ECFEFF] px-4 py-3 text-right">
-            <p className="text-xs font-bold text-[#0F766E]">식단 점수</p>
-            <p className="text-3xl font-black text-[#111827]">{score}</p>
-          </div>
+          <ScoreDial score={score} />
         </div>
-        <div className="mt-5 h-3 overflow-hidden rounded-full bg-[#E5E7EB]">
+        <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/12">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-[#5EEAD4] to-[#60A5FA] transition-all duration-500"
+            className="h-full rounded-full bg-[#2DD4BF] transition-all duration-500"
             style={{ width: `${Math.min(100, caloriePercent)}%` }}
           />
         </div>
         <div className="mt-5 grid grid-cols-3 gap-2">
-          <GoalTile label="단백질 남음" value={Math.max(0, target.protein - total.protein)} unit="g" />
-          <GoalTile label="탄수 남음" value={Math.max(0, target.carbs - total.carbs)} unit="g" />
-          <GoalTile label="나트륨 여유" value={Math.max(0, target.sodium - total.sodium)} unit="mg" />
+          <GoalTile label="단백질" value={Math.max(0, target.protein - total.protein)} unit="g" tone="violet" />
+          <GoalTile label="탄수" value={Math.max(0, target.carbs - total.carbs)} unit="g" tone="blue" />
+          <GoalTile label="나트륨" value={Math.max(0, target.sodium - total.sodium)} unit="mg" tone="rose" />
         </div>
         <button
           onClick={() => {
             if (mealCount === 0) loadDefaultMeals("chicken-23", "replace");
             goMeals();
           }}
-          className="mt-5 w-full rounded-2xl bg-[#111827] py-4 text-base font-black text-white transition active:scale-[0.99]"
+          className="mt-5 h-13 w-full rounded-lg bg-white text-base font-black text-[#111827] shadow-lg shadow-black/20 transition active:scale-[0.99]"
         >
-          {mealCount === 0 ? "기본 식단 입력하고 수정" : "오늘 식단 수정하기"}
+          {mealCount === 0 ? "기본 식단으로 시작" : "오늘 식단 수정"}
         </button>
       </div>
 
@@ -174,6 +157,7 @@ function HomeView({ goMeals }: { goMeals: () => void }) {
         <InfoCard label="오늘 체중">
           <div className="flex items-end gap-1">
             <input
+              aria-label="오늘 체중"
               value={log.weightKg}
               onChange={(event) => setWeight(Number(event.target.value))}
               className="w-24 bg-transparent text-4xl font-black outline-none"
@@ -181,17 +165,17 @@ function HomeView({ goMeals }: { goMeals: () => void }) {
               step="0.1"
               inputMode="decimal"
             />
-            <span className="pb-1.5 text-sm font-bold text-[#9CA3AF]">kg</span>
+            <span className="pb-1.5 text-sm font-bold text-[#7B8494]">kg</span>
           </div>
         </InfoCard>
         <InfoCard label="목표">
           <p className="text-4xl font-black">{profile.targetWeightKg}</p>
-          <p className="mt-1 text-xs font-semibold text-[#9CA3AF]">kg · 체지방 {profile.targetBodyFatPercent}%</p>
+          <p className="mt-1 text-xs font-bold text-[#7B8494]">kg · 체지방 {profile.targetBodyFatPercent}%</p>
         </InfoCard>
       </div>
 
-      <div className="rounded-[1.35rem] bg-[#151A21] p-1.5">
-        <div className="grid grid-cols-2 gap-1.5">
+      <div className="rounded-lg bg-white p-1 shadow-sm ring-1 ring-slate-200">
+        <div className="grid grid-cols-2 gap-1">
           <SegmentButton active={log.dayType === "training"} onClick={() => setDayType("training")}>
             운동일
           </SegmentButton>
@@ -203,7 +187,7 @@ function HomeView({ goMeals }: { goMeals: () => void }) {
 
       <FocusNote total={total} target={target} hasDeviation={hasDeviation} />
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         {(Object.keys(nutrientLabels) as NutrientKey[]).map((key) => (
           <ProgressRow key={key} name={key} value={total[key]} target={target[key]} />
         ))}
@@ -226,14 +210,11 @@ function MealsView() {
   }
 
   return (
-    <section className="space-y-5">
-      <header>
-        <p className="text-sm font-medium text-[#9CA3AF]">{koreanDate(log.date)} 기록</p>
-        <h1 className="mt-1 text-[2rem] font-black tracking-normal">오늘 식단</h1>
-      </header>
+    <section className="space-y-4">
+      <AppHeader eyebrow={koreanDate(log.date)} title="오늘 식단" aside={`${log.entries.length}개 입력`} />
 
-      <div className="rounded-[1.5rem] bg-[#151A21] p-4 shadow-xl shadow-black/20">
-        <div className="grid grid-cols-2 gap-2 rounded-2xl bg-[#0B0F14] p-1.5">
+      <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
+        <div className="grid grid-cols-2 gap-1 rounded-lg bg-[#F1F5F9] p-1">
           <SegmentButton active={chicken === "chicken-18"} onClick={() => setChicken("chicken-18")}>
             닭 18g
           </SegmentButton>
@@ -244,13 +225,13 @@ function MealsView() {
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button
             onClick={() => loadTemplate("append")}
-            className="rounded-2xl bg-[#5EEAD4] py-4 text-sm font-black text-[#111827] shadow-lg shadow-teal-950/30 transition active:scale-[0.99]"
+            className="h-12 rounded-lg bg-[#111827] text-sm font-black text-white transition active:scale-[0.99]"
           >
             기본 식단 추가
           </button>
           <button
             onClick={() => loadTemplate("replace")}
-            className="rounded-2xl bg-white/[0.08] py-4 text-sm font-black text-white transition active:scale-[0.99]"
+            className="h-12 rounded-lg bg-[#EEF2F7] text-sm font-black text-[#111827] transition active:scale-[0.99]"
           >
             전체 교체
           </button>
@@ -267,17 +248,17 @@ function MealsView() {
         const mealTotal = calculateDailyNutrition(entries, foods);
 
         return (
-          <div key={mealType} className="rounded-[1.5rem] bg-[#151A21] p-4">
+          <div key={mealType} className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-xl font-black">{mealType}</h2>
-                <p className="mt-0.5 text-xs font-semibold text-[#9CA3AF]">
+                <p className="mt-0.5 text-xs font-bold text-[#7B8494]">
                   {entries.length ? `${round(mealTotal.calories)}kcal · 단백질 ${round(mealTotal.protein)}g` : "미입력"}
                 </p>
               </div>
               <select
                 aria-label={`${mealType} 음식 추가`}
-                className="max-w-36 rounded-2xl bg-[#0B0F14] px-3 py-3 text-sm font-bold outline-none"
+                className="max-w-36 rounded-lg bg-[#F1F5F9] px-3 py-3 text-sm font-extrabold text-[#111827] outline-none"
                 defaultValue=""
                 onChange={(event) => {
                   if (event.target.value) addEntry(event.target.value, mealType);
@@ -293,9 +274,9 @@ function MealsView() {
               </select>
             </div>
 
-            <div className="mt-4 space-y-3">
+            <div className="mt-4 space-y-2">
               {entries.length === 0 && (
-                <div className="rounded-2xl border border-dashed border-white/10 bg-[#0B0F14]/80 px-4 py-5 text-center text-sm font-semibold text-[#9CA3AF]">
+                <div className="rounded-lg border border-dashed border-slate-300 bg-[#F8FAFC] px-4 py-5 text-center text-sm font-bold text-[#7B8494]">
                   음식 추가 버튼으로 기록하세요
                 </div>
               )}
@@ -303,26 +284,27 @@ function MealsView() {
                 const food = foods.find((item) => item.id === entry.foodId);
                 const nutrition = calculateEntryNutrition(entry, food);
                 return (
-                  <div key={entry.id} className="rounded-2xl bg-[#0B0F14] p-3">
+                  <div key={entry.id} className="rounded-lg bg-[#F8FAFC] p-3 ring-1 ring-slate-100">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-base font-black">{food?.name ?? "삭제된 음식"}</p>
-                        <p className="mt-1 text-xs font-semibold text-[#9CA3AF]">
+                        <p className="mt-1 text-xs font-bold text-[#7B8494]">
                           {entry.time ? `${entry.time} · ` : ""}
                           {round(nutrition.calories)}kcal · 단백질 {round(nutrition.protein)}g
                         </p>
                       </div>
                       <button
                         onClick={() => removeEntry(entry.id)}
-                        className="rounded-full bg-red-500/10 px-3 py-1.5 text-xs font-black text-red-300"
+                        className="rounded-md bg-[#FFF1F2] px-3 py-1.5 text-xs font-black text-[#E11D48]"
                       >
                         삭제
                       </button>
                     </div>
                     <div className="mt-3 grid grid-cols-[2.75rem_1fr_2.75rem] items-center gap-2">
                       <AmountButton onClick={() => updateEntryAmount(entry.id, entry.amount - stepFor(entry.unit))}>-</AmountButton>
-                      <div className="flex h-12 items-center rounded-2xl bg-white/[0.06] px-3">
+                      <div className="flex h-12 items-center rounded-lg bg-white px-3 ring-1 ring-slate-200">
                         <input
+                          aria-label={`${food?.name ?? "음식"} 섭취량`}
                           className="min-w-0 flex-1 bg-transparent text-center text-xl font-black outline-none"
                           type="number"
                           value={entry.amount}
@@ -330,7 +312,7 @@ function MealsView() {
                           inputMode="decimal"
                           onChange={(event) => updateEntryAmount(entry.id, Number(event.target.value))}
                         />
-                        <span className="w-8 text-center text-sm font-bold text-[#9CA3AF]">{entry.unit}</span>
+                        <span className="w-8 text-center text-sm font-bold text-[#7B8494]">{entry.unit}</span>
                       </div>
                       <AmountButton onClick={() => updateEntryAmount(entry.id, entry.amount + stepFor(entry.unit))}>+</AmountButton>
                     </div>
@@ -372,38 +354,35 @@ function AnalysisView() {
   const weightDelta = weights.length >= 2 ? weights[weights.length - 1] - weights[0] : 0;
 
   return (
-    <section className="space-y-5">
-      <header>
-        <p className="text-sm font-medium text-[#9CA3AF]">최근 7일 흐름</p>
-        <h1 className="mt-1 text-[2rem] font-black tracking-normal">분석</h1>
-      </header>
+    <section className="space-y-4">
+      <AppHeader eyebrow="최근 7일 흐름" title="분석" aside={`${recorded.length}일 기록`} />
 
       <div className="grid grid-cols-2 gap-3">
         <InfoCard label="평균 칼로리">
           <p className="text-3xl font-black">{recorded.length ? round(avgCalories) : "-"}</p>
-          <p className="mt-1 text-xs font-semibold text-[#9CA3AF]">기록 {recorded.length}일</p>
+          <p className="mt-1 text-xs font-bold text-[#7B8494]">기록 {recorded.length}일</p>
         </InfoCard>
         <InfoCard label="평균 점수">
           <p className="text-3xl font-black">{recorded.length ? round(avgScore) : "-"}</p>
-          <p className="mt-1 text-xs font-semibold text-[#9CA3AF]">100점 기준</p>
+          <p className="mt-1 text-xs font-bold text-[#7B8494]">100점 기준</p>
         </InfoCard>
         <InfoCard label="단백질 달성">
           <p className="text-3xl font-black">{proteinHits}/{recorded.length || 0}</p>
-          <p className="mt-1 text-xs font-semibold text-[#9CA3AF]">목표 90% 이상</p>
+          <p className="mt-1 text-xs font-bold text-[#7B8494]">목표 90% 이상</p>
         </InfoCard>
         <InfoCard label="체중 변화">
           <p className="text-3xl font-black">{weights.length >= 2 ? `${weightDelta > 0 ? "+" : ""}${round(weightDelta)}` : "-"}</p>
-          <p className="mt-1 text-xs font-semibold text-[#9CA3AF]">kg · 기록 기준</p>
+          <p className="mt-1 text-xs font-bold text-[#7B8494]">kg · 기록 기준</p>
         </InfoCard>
       </div>
 
-      <div className="rounded-[1.5rem] bg-[#151A21] p-4">
+      <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-black">주간 실행력</h2>
-            <p className="mt-1 text-xs font-semibold text-[#9CA3AF]">막대가 목표 칼로리 대비 섭취량입니다</p>
+            <p className="mt-1 text-xs font-bold text-[#7B8494]">목표 칼로리 대비 섭취량</p>
           </div>
-          <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-black text-[#F5F7FA]">
+          <span className="rounded-md bg-[#FFF1F2] px-3 py-1.5 text-xs font-black text-[#E11D48]">
             이탈 {deviations}회
           </span>
         </div>
@@ -411,16 +390,16 @@ function AnalysisView() {
           {summaries.map((item) => (
             <div key={item.date} className="grid grid-cols-[3.4rem_1fr_3.2rem] items-center gap-3">
               <div>
-                <p className="text-xs font-bold text-[#9CA3AF]">{item.date === today ? "오늘" : koreanDate(item.date).slice(-3)}</p>
+                <p className="text-xs font-bold text-[#7B8494]">{item.date === today ? "오늘" : koreanDate(item.date).slice(-3)}</p>
                 <p className="text-sm font-black">{item.date.slice(8)}</p>
               </div>
-              <div className="h-3 overflow-hidden rounded-full bg-white/10">
+              <div className="h-2 overflow-hidden rounded-full bg-[#E5EAF1]">
                 <div
-                  className={`h-full rounded-full ${item.hasEntries ? "bg-[#5EEAD4]" : "bg-white/20"}`}
+                  className={`h-full rounded-full ${item.hasEntries ? "bg-[#111827]" : "bg-slate-300"}`}
                   style={{ width: `${Math.min(100, item.caloriePercent)}%` }}
                 />
               </div>
-              <p className="text-right text-xs font-black text-[#D1D5DB]">{item.hasEntries ? item.score : "-"}</p>
+              <p className="text-right text-xs font-black text-[#566174]">{item.hasEntries ? item.score : "-"}</p>
             </div>
           ))}
         </div>
@@ -428,7 +407,7 @@ function AnalysisView() {
 
       <TargetSettings targets={nutritionTargets} updateTarget={updateTarget} />
 
-      <div className="rounded-[1.5rem] bg-[#151A21] p-4">
+      <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
         <h2 className="text-xl font-black">다음 개선 포인트</h2>
         <div className="mt-3 space-y-2">
           {recorded.length === 0 && <Insight text="아직 분석할 식단 기록이 없습니다. 오늘 식단부터 입력해 주세요." />}
@@ -503,26 +482,30 @@ function FoodsView() {
   }
 
   return (
-    <section className="space-y-5">
-      <header className="flex items-end justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium text-[#9CA3AF]">자주 먹는 음식과 기준량</p>
-          <h1 className="mt-1 text-[2rem] font-black tracking-normal">음식 DB</h1>
-        </div>
+    <section className="space-y-4">
+      <AppHeader eyebrow={`${foods.length}개 음식`} title="음식 DB" aside="라벨 기준" />
+
+      <div className="flex gap-2">
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="음식명, 브랜드, 카테고리 검색"
+          className="h-12 min-w-0 flex-1 rounded-lg bg-white px-4 text-base font-bold text-[#111827] shadow-sm outline-none ring-1 ring-slate-200 placeholder:text-[#9CA3AF]"
+        />
         <button
           onClick={openNewFoodForm}
-          className="shrink-0 rounded-2xl bg-white px-4 py-3 text-sm font-black text-[#111827] transition active:scale-[0.98]"
+          className="h-12 shrink-0 rounded-lg bg-[#111827] px-4 text-sm font-black text-white shadow-lg shadow-slate-300 transition active:scale-[0.98]"
         >
-          {formOpen ? "닫기" : "직접 등록"}
+          {formOpen ? "닫기" : "등록"}
         </button>
-      </header>
+      </div>
 
       {formOpen && (
-        <div className="rounded-[1.5rem] bg-[#151A21] p-4">
+        <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-black">{editingFoodId ? "음식 수정" : "음식 등록"}</h2>
-              <p className="mt-1 text-xs font-semibold text-[#9CA3AF]">제품 라벨 기준으로 입력하면 계산이 더 정확해집니다</p>
+              <p className="mt-1 text-xs font-bold text-[#7B8494]">제품 라벨 기준으로 입력하면 계산이 더 정확해집니다</p>
             </div>
             {editingFoodId && (
               <button
@@ -530,7 +513,7 @@ function FoodsView() {
                   setEditingFoodId(null);
                   setForm(emptyFoodForm);
                 }}
-                className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-black text-[#F5F7FA]"
+                className="rounded-md bg-[#EEF2F7] px-3 py-1.5 text-xs font-black text-[#111827]"
               >
                 새 음식
               </button>
@@ -541,11 +524,11 @@ function FoodsView() {
             <TextField label="브랜드" value={form.brand} onChange={(value) => updateForm("brand", value)} />
             <NumberField label="기준량" value={form.baseAmount} onChange={(value) => updateForm("baseAmount", value)} />
             <label className="block">
-              <span className="text-xs font-bold text-[#9CA3AF]">단위</span>
+              <span className="text-xs font-bold text-[#7B8494]">단위</span>
               <select
                 value={form.unit}
                 onChange={(event) => updateForm("unit", event.target.value as Unit)}
-                className="mt-1 h-12 w-full rounded-2xl bg-[#0B0F14] px-3 text-sm font-black outline-none"
+                className="mt-1 h-12 w-full rounded-lg bg-[#F1F5F9] px-3 text-sm font-black text-[#111827] outline-none ring-1 ring-slate-200"
               >
                 {units.map((unit) => (
                   <option key={unit} value={unit}>
@@ -565,33 +548,71 @@ function FoodsView() {
           <button
             disabled={!canSubmit}
             onClick={saveFood}
-            className="mt-4 w-full rounded-2xl bg-[#5EEAD4] py-4 text-base font-black text-[#111827] transition disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-[#6B7280] active:scale-[0.99]"
+            className="mt-4 h-13 w-full rounded-lg bg-[#111827] text-base font-black text-white transition disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-[#9CA3AF] active:scale-[0.99]"
           >
             {editingFoodId ? "수정 저장" : "음식 저장"}
           </button>
-          <p className="mt-3 text-xs font-semibold text-[#9CA3AF]">음식명, 기준량, 칼로리 또는 단백질 중 하나는 꼭 필요합니다.</p>
         </div>
       )}
 
-      <div className="sticky top-0 z-10 -mx-5 bg-[#0B0F14]/90 px-5 py-2 backdrop-blur-xl">
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="음식명, 브랜드, 카테고리 검색"
-          className="w-full rounded-2xl bg-[#151A21] px-4 py-4 text-base font-bold outline-none placeholder:text-[#6B7280]"
-        />
-      </div>
-      <div className="space-y-3">
+      <div className="space-y-2">
         {filtered.map((food) => (
           <FoodCard key={food.id} food={food} onEdit={() => editFood(food)} />
         ))}
         {filtered.length === 0 && (
-          <div className="rounded-[1.5rem] bg-[#151A21] p-6 text-center text-sm font-bold text-[#9CA3AF]">
+          <div className="rounded-lg bg-white p-6 text-center text-sm font-bold text-[#7B8494] shadow-sm ring-1 ring-slate-200">
             검색 결과가 없습니다
           </div>
         )}
       </div>
     </section>
+  );
+}
+
+function AppHeader({ eyebrow, title, aside }: { eyebrow: string; title: string; aside: string }) {
+  return (
+    <header className="flex items-start justify-between gap-4">
+      <div>
+        <p className="text-sm font-extrabold text-[#7B8494]">{eyebrow}</p>
+        <h1 className="mt-1 text-[2rem] font-black leading-tight tracking-normal">{title}</h1>
+      </div>
+      <span className="rounded-md bg-white px-3 py-1.5 text-xs font-black text-[#111827] shadow-sm ring-1 ring-slate-200">
+        {aside}
+      </span>
+    </header>
+  );
+}
+
+function DateRail({ dates, selectedDate, onSelect }: { dates: string[]; selectedDate: string; onSelect: (date: string) => void }) {
+  return (
+    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+      {dates.map((date) => (
+        <button
+          key={date}
+          onClick={() => onSelect(date)}
+          className={`min-w-[4.5rem] rounded-lg px-3 py-2 text-left shadow-sm transition ${
+            selectedDate === date ? "bg-[#111827] text-white" : "bg-white text-[#7B8494] ring-1 ring-slate-200"
+          }`}
+        >
+          <p className="text-xs font-extrabold">{date === todayKey() ? "오늘" : koreanDate(date).split(" ")[1]}</p>
+          <p className="mt-0.5 text-lg font-black">{date.slice(8)}</p>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ScoreDial({ score }: { score: number }) {
+  return (
+    <div
+      className="grid h-22 w-22 shrink-0 place-items-center rounded-full"
+      style={{ background: `conic-gradient(#2DD4BF ${score * 3.6}deg, rgba(255,255,255,0.14) 0deg)` }}
+    >
+      <div className="grid h-16 w-16 place-items-center rounded-full bg-[#111827] text-center">
+        <p className="text-[0.65rem] font-black text-slate-300">점수</p>
+        <p className="-mt-1 text-2xl font-black">{score}</p>
+      </div>
+    </div>
   );
 }
 
@@ -606,13 +627,13 @@ function TargetSettings({
   const target = targets[dayType];
 
   return (
-    <div className="rounded-[1.5rem] bg-[#151A21] p-4">
+    <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-black">목표 조정</h2>
-          <p className="mt-1 text-xs font-semibold text-[#9CA3AF]">운동일과 휴식일 기준을 따로 저장합니다</p>
+          <p className="mt-1 text-xs font-bold text-[#7B8494]">운동일과 휴식일 기준을 따로 저장합니다</p>
         </div>
-        <div className="grid grid-cols-2 gap-1 rounded-2xl bg-[#0B0F14] p-1">
+        <div className="grid grid-cols-2 gap-1 rounded-lg bg-[#F1F5F9] p-1">
           <SmallSegment active={dayType === "training"} onClick={() => setDayType("training")}>
             운동
           </SmallSegment>
@@ -638,15 +659,25 @@ function TargetSettings({
 
 function FocusNote({ total, target, hasDeviation }: { total: Nutrients; target: NutritionTarget; hasDeviation: boolean }) {
   let text = "지금 흐름은 안정적입니다. 다음 식사도 같은 기준으로 기록하면 됩니다.";
+  let tone = "border-[#2DD4BF]/30 bg-[#ECFDF5] text-[#065F46]";
   if (total.protein < target.protein * 0.75) text = "단백질이 아직 부족합니다. 다음 끼니에는 단백질 음식을 먼저 채우세요.";
-  if (total.calories > target.calories * 1.1) text = "칼로리가 목표를 넘었습니다. 남은 식사는 단백질과 채소 중심으로 가볍게 맞추세요.";
-  if (total.sodium > target.sodium) text = "나트륨이 목표를 넘었습니다. 가공식품과 국물 섭취를 줄이는 쪽이 좋습니다.";
-  if (hasDeviation) text = "이탈음식이 기록되었습니다. 오늘은 추가 제한보다 남은 기록을 정확히 남기는 것이 우선입니다.";
+  if (total.calories > target.calories * 1.1) {
+    text = "칼로리가 목표를 넘었습니다. 남은 식사는 단백질과 채소 중심으로 가볍게 맞추세요.";
+    tone = "border-[#F59E0B]/30 bg-[#FFFBEB] text-[#92400E]";
+  }
+  if (total.sodium > target.sodium) {
+    text = "나트륨이 목표를 넘었습니다. 가공식품과 국물 섭취를 줄이는 쪽이 좋습니다.";
+    tone = "border-[#E11D48]/30 bg-[#FFF1F2] text-[#9F1239]";
+  }
+  if (hasDeviation) {
+    text = "이탈음식이 기록되었습니다. 오늘은 추가 제한보다 남은 기록을 정확히 남기는 것이 우선입니다.";
+    tone = "border-[#E11D48]/30 bg-[#FFF1F2] text-[#9F1239]";
+  }
 
   return (
-    <div className="rounded-[1.35rem] border border-[#5EEAD4]/20 bg-[#5EEAD4]/10 p-4">
-      <p className="text-xs font-black text-[#5EEAD4]">오늘의 초점</p>
-      <p className="mt-2 text-sm font-bold leading-6 text-[#D1FAE5]">{text}</p>
+    <div className={`rounded-lg border p-4 ${tone}`}>
+      <p className="text-xs font-black">오늘의 초점</p>
+      <p className="mt-2 text-sm font-extrabold leading-6">{text}</p>
     </div>
   );
 }
@@ -659,24 +690,24 @@ function ProgressRow({ name, value, target }: { name: NutrientKey; value: number
   const width = Math.min(100, percent);
 
   return (
-    <div className="rounded-[1.35rem] bg-[#151A21] p-4 shadow-lg shadow-black/10">
+    <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-base font-black">{meta.label}</p>
-          <p className="mt-1 text-sm font-semibold text-[#9CA3AF]">
+          <p className="mt-1 text-sm font-bold text-[#7B8494]">
             {round(value)} / {target}
             {meta.unit} · {percent}%
           </p>
         </div>
         <StatusBadge status={status} />
       </div>
-      <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/10">
+      <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#E5EAF1]">
         <div
-          className={`h-full rounded-full bg-gradient-to-r ${meta.color} transition-all duration-500`}
-          style={{ width: `${width}%` }}
+          className="h-full rounded-full transition-all duration-500"
+          style={{ width: `${width}%`, backgroundColor: meta.accent }}
         />
       </div>
-      <p className="mt-3 text-xs font-bold text-[#9CA3AF]">
+      <p className="mt-3 text-xs font-bold text-[#7B8494]">
         {remain <= 0
           ? `${meta.label} ${meta.limit ? `${round(Math.abs(remain))}${meta.unit} 초과` : "목표 달성"}`
           : `${meta.label} ${round(remain)}${meta.unit} 남음`}
@@ -690,23 +721,23 @@ function FoodCard({ food, onEdit }: { food: FoodItem; onEdit: () => void }) {
   const missing = (Object.keys(nutrientLabels) as NutrientKey[]).filter((key) => n[key] === undefined).length;
 
   return (
-    <div className="rounded-[1.5rem] bg-[#151A21] p-4">
+    <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-lg font-black">{food.name}</p>
-          <p className="mt-1 text-sm font-semibold text-[#9CA3AF]">
+          <p className="mt-1 text-sm font-bold text-[#7B8494]">
             {food.brand ? `${food.brand} · ` : ""}
             {food.baseAmount}
             {food.unit} 기준 · {food.category}
           </p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-2">
-          <span className={`rounded-full px-3 py-1.5 text-xs font-black ${missing ? "bg-yellow-400/15 text-yellow-200" : "bg-white/10 text-[#F5F7FA]"}`}>
+          <span className={`rounded-md px-3 py-1.5 text-xs font-black ${missing ? "bg-[#FFFBEB] text-[#92400E]" : "bg-[#F1F5F9] text-[#566174]"}`}>
             {missing ? "보완필요" : food.favorite ? "즐겨찾기" : "일반"}
           </span>
           <button
             onClick={onEdit}
-            className="rounded-full bg-[#5EEAD4]/15 px-3 py-1.5 text-xs font-black text-[#5EEAD4]"
+            className="rounded-md bg-[#ECFDF5] px-3 py-1.5 text-xs font-black text-[#047857]"
           >
             수정
           </button>
@@ -743,12 +774,12 @@ function foodToForm(food: FoodItem): FoodForm {
 function TextField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <label className="block">
-      <span className="text-xs font-bold text-[#9CA3AF]">{label}</span>
+      <span className="text-xs font-bold text-[#7B8494]">{label}</span>
       <input
         aria-label={label}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 h-12 w-full rounded-2xl bg-[#0B0F14] px-3 text-sm font-black outline-none"
+        className="mt-1 h-12 w-full rounded-lg bg-[#F1F5F9] px-3 text-sm font-black text-[#111827] outline-none ring-1 ring-slate-200"
       />
     </label>
   );
@@ -757,29 +788,35 @@ function TextField({ label, value, onChange }: { label: string; value: string; o
 function NumberField({ label, value, onChange, unit }: { label: string; value: number; onChange: (value: number) => void; unit?: string }) {
   return (
     <label className="block">
-      <span className="text-xs font-bold text-[#9CA3AF]">{label}</span>
-      <div className="mt-1 flex h-12 items-center rounded-2xl bg-[#0B0F14] px-3">
+      <span className="text-xs font-bold text-[#7B8494]">{label}</span>
+      <div className="mt-1 flex h-12 items-center rounded-lg bg-[#F1F5F9] px-3 ring-1 ring-slate-200">
         <input
           aria-label={label}
           value={value}
           onChange={(event) => onChange(Number(event.target.value))}
           type="number"
           inputMode="decimal"
-          className="min-w-0 flex-1 bg-transparent text-sm font-black outline-none"
+          className="min-w-0 flex-1 bg-transparent text-sm font-black text-[#111827] outline-none"
         />
-        {unit && <span className="text-xs font-bold text-[#9CA3AF]">{unit}</span>}
+        {unit && <span className="text-xs font-bold text-[#7B8494]">{unit}</span>}
       </div>
     </label>
   );
 }
 
-function GoalTile({ label, value, unit }: { label: string; value: number; unit: string }) {
+function GoalTile({ label, value, unit, tone }: { label: string; value: number; unit: string; tone: "violet" | "blue" | "rose" }) {
+  const toneClass = {
+    violet: "bg-[#F5F3FF] text-[#6D28D9]",
+    blue: "bg-[#EFF6FF] text-[#1D4ED8]",
+    rose: "bg-[#FFF1F2] text-[#BE123C]",
+  }[tone];
+
   return (
-    <div className="rounded-2xl bg-[#F3F4F6] px-3 py-3">
-      <p className="text-[0.68rem] font-bold text-[#6B7280]">{label}</p>
-      <p className="mt-1 truncate text-lg font-black text-[#111827]">
+    <div className={`rounded-lg px-3 py-3 ${toneClass}`}>
+      <p className="text-[0.68rem] font-black">{label} 남음</p>
+      <p className="mt-1 truncate text-lg font-black">
         {round(value)}
-        <span className="ml-0.5 text-xs text-[#6B7280]">{unit}</span>
+        <span className="ml-0.5 text-xs opacity-70">{unit}</span>
       </p>
     </div>
   );
@@ -787,8 +824,8 @@ function GoalTile({ label, value, unit }: { label: string; value: number; unit: 
 
 function InfoCard({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-[1.35rem] bg-[#151A21] p-4">
-      <p className="text-xs font-bold text-[#9CA3AF]">{label}</p>
+    <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
+      <p className="text-xs font-black text-[#7B8494]">{label}</p>
       <div className="mt-2">{children}</div>
     </div>
   );
@@ -798,8 +835,8 @@ function SegmentButton({ active, onClick, children }: { active: boolean; onClick
   return (
     <button
       onClick={onClick}
-      className={`rounded-2xl py-3 text-sm font-black transition active:scale-[0.98] ${
-        active ? "bg-white text-[#111827]" : "text-[#9CA3AF]"
+      className={`rounded-md py-3 text-sm font-black transition active:scale-[0.98] ${
+        active ? "bg-white text-[#111827] shadow-sm" : "text-[#7B8494]"
       }`}
     >
       {children}
@@ -811,8 +848,8 @@ function SmallSegment({ active, onClick, children }: { active: boolean; onClick:
   return (
     <button
       onClick={onClick}
-      className={`rounded-xl px-3 py-2 text-xs font-black transition active:scale-[0.98] ${
-        active ? "bg-white text-[#111827]" : "text-[#9CA3AF]"
+      className={`rounded-md px-3 py-2 text-xs font-black transition active:scale-[0.98] ${
+        active ? "bg-white text-[#111827] shadow-sm" : "text-[#7B8494]"
       }`}
     >
       {children}
@@ -822,7 +859,7 @@ function SmallSegment({ active, onClick, children }: { active: boolean; onClick:
 
 function AmountButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (
-    <button onClick={onClick} className="h-12 rounded-2xl bg-white/[0.08] text-xl font-black transition active:scale-[0.95]">
+    <button onClick={onClick} className="h-12 rounded-lg bg-[#EEF2F7] text-xl font-black text-[#111827] transition active:scale-[0.95]">
       {children}
     </button>
   );
@@ -830,8 +867,8 @@ function AmountButton({ onClick, children }: { onClick: () => void; children: Re
 
 function MetricPill({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-2xl bg-[#0B0F14] px-2 py-3">
-      <p className="text-xs font-bold text-[#9CA3AF]">{label}</p>
+    <div className="rounded-lg bg-[#F8FAFC] px-2 py-3">
+      <p className="text-xs font-black text-[#7B8494]">{label}</p>
       <p className="mt-1 truncate text-base font-black">{value}</p>
     </div>
   );
@@ -840,18 +877,18 @@ function MetricPill({ label, value }: { label: string; value: string | number })
 function StatusBadge({ status }: { status: "적정" | "부족" | "초과" | "경고" }) {
   const className =
     status === "적정"
-      ? "bg-green-500/15 text-green-300"
+      ? "bg-[#ECFDF5] text-[#047857]"
       : status === "부족"
-        ? "bg-yellow-400/15 text-yellow-200"
-        : "bg-red-500/15 text-red-300";
+        ? "bg-[#FFFBEB] text-[#92400E]"
+        : "bg-[#FFF1F2] text-[#BE123C]";
 
-  return <span className={`rounded-full px-3 py-1.5 text-xs font-black ${className}`}>{status}</span>;
+  return <span className={`rounded-md px-3 py-1.5 text-xs font-black ${className}`}>{status}</span>;
 }
 
 function Mini({ label, value, unit = "" }: { label: string; value?: number; unit?: string }) {
   return (
-    <div className="rounded-2xl bg-[#0B0F14] p-3">
-      <p className="text-xs font-bold text-[#9CA3AF]">{label}</p>
+    <div className="rounded-lg bg-[#F8FAFC] p-3">
+      <p className="text-xs font-black text-[#7B8494]">{label}</p>
       <p className="mt-1 truncate font-black">
         {value ?? "-"}
         {value !== undefined ? unit : ""}
@@ -861,7 +898,7 @@ function Mini({ label, value, unit = "" }: { label: string; value?: number; unit
 }
 
 function Insight({ text }: { text: string }) {
-  return <p className="rounded-2xl bg-[#0B0F14] px-4 py-3 text-sm font-bold leading-6 text-[#D1D5DB]">{text}</p>;
+  return <p className="rounded-lg bg-[#F8FAFC] px-4 py-3 text-sm font-bold leading-6 text-[#566174]">{text}</p>;
 }
 
 function stepFor(unit: string) {
