@@ -42,7 +42,13 @@ const tabItems: Array<{ id: TabId; label: string; icon: string }> = [
   { id: "foods", label: "음식", icon: "⌕" },
 ];
 
-const coreMeals: MealType[] = ["아침", "점심", "간식", "저녁"];
+const coreMeals = ["아침", "점심", "간식", "저녁"] as const satisfies readonly MealType[];
+const mealTargetRatios: Record<(typeof coreMeals)[number], number> = {
+  아침: 0.25,
+  점심: 0.35,
+  간식: 0.15,
+  저녁: 0.25,
+};
 
 const rotationGroups = [
   { label: "채소", emoji: "🥬", foodIds: ["cucumber", "cabbage", "frozen-vegetables", "cherry-tomato"] },
@@ -119,6 +125,7 @@ function HomeView({ goMeals }: { goMeals: () => void }) {
   const { profile, log, logsByDate, selectedDate, selectDate, setWeight, foods, loadDefaultMeals } = useNutrition();
   const total = useMemo(() => calculateDailyNutrition(log.entries, foods), [foods, log.entries]);
   const target = targetForWeight(log.weightKg, log.dayType);
+  const mealContext = useMemo(() => getMealContext(log, foods, target), [foods, log, target]);
   const hasDeviation = log.entries.some((entry) => entry.mealType === "이탈음식");
   const score = scoreDay(total, target, hasDeviation);
   const mealCount = log.entries.length;
@@ -186,15 +193,11 @@ function HomeView({ goMeals }: { goMeals: () => void }) {
         </div>
       </InfoCard>
 
-      <FocusNote total={total} target={target} hasDeviation={hasDeviation} />
+      <FocusNote context={mealContext} total={total} target={target} hasDeviation={hasDeviation} />
 
       <TrendPanel week={weekSummary} month={monthSummary} />
 
-      <div className="space-y-2">
-        {(["protein", "carbs", "fat", "calories"] as NutrientKey[]).map((key) => (
-          <ProgressRow key={key} name={key} value={total[key]} target={target[key]} />
-        ))}
-      </div>
+      <MealAwareNutritionPanel context={mealContext} total={total} target={target} />
     </section>
   );
 }
@@ -663,7 +666,7 @@ function TrendPanel({ week, month }: { week: PeriodSummary; month: PeriodSummary
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-black">누적 기록</h2>
-          <p className="mt-1 text-xs font-bold text-[#7B8494]">월요일 기준 흐름만 간단히 봅니다</p>
+          <p className="mt-1 text-xs font-bold text-[#7B8494]">막대가 높을수록 많이 기록된 날입니다</p>
         </div>
         <div className="grid grid-cols-2 gap-1 rounded-lg bg-[#F1F5F9] p-1">
           <button
@@ -687,7 +690,7 @@ function TrendPanel({ week, month }: { week: PeriodSummary; month: PeriodSummary
             <p className="mt-1 text-2xl font-black">
               {summary.progressDays}/{summary.days}
             </p>
-            <p className="mt-1 text-xs font-bold text-[#7B8494]">{view === "week" ? "월요일부터 오늘까지" : "이번 달 오늘까지"}</p>
+            <p className="mt-1 text-xs font-bold text-[#7B8494]">{view === "week" ? "월요일부터 오늘까지 지난 날" : "이번 달 오늘까지 지난 날"}</p>
           </div>
           <div className="text-right">
             <p className="text-xs font-black text-[#7B8494]">평균 체중</p>
@@ -695,15 +698,15 @@ function TrendPanel({ week, month }: { week: PeriodSummary; month: PeriodSummary
           </div>
         </div>
         <div className="mt-4 space-y-3">
-          <CompactBars title="체중" items={summary.weights} unit="kg" tone="#111827" />
-          <CompactBars title="단백질" items={summary.proteins} unit="g" tone="#7C3AED" />
+          <CompactBars title="체중 변화" caption="매일 입력한 체중" items={summary.weights} unit="kg" tone="#111827" />
+          <CompactBars title="단백질 섭취" caption="그날 먹은 단백질 총량" items={summary.proteins} unit="g" tone="#7C3AED" />
         </div>
       </div>
     </div>
   );
 }
 
-function CompactBars({ title, items, unit, tone }: { title: string; items: Array<{ date: string; value: number }>; unit: string; tone: string }) {
+function CompactBars({ title, caption, items, unit, tone }: { title: string; caption: string; items: Array<{ date: string; value: number }>; unit: string; tone: string }) {
   const max = Math.max(...items.map((item) => item.value), 1);
   const recorded = items.filter((item) => item.value > 0);
   const latest = recorded.at(-1)?.value ?? 0;
@@ -711,7 +714,10 @@ function CompactBars({ title, items, unit, tone }: { title: string; items: Array
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-black text-[#7B8494]">{title}</p>
+        <div>
+          <p className="text-xs font-black text-[#111827]">{title}</p>
+          <p className="mt-0.5 text-[0.68rem] font-bold text-[#7B8494]">{caption}</p>
+        </div>
         <p className="text-xs font-bold text-[#7B8494]">{latest ? `${round(latest)}${unit}` : "기록 없음"}</p>
       </div>
       <div className="flex h-14 items-end gap-1 rounded-lg bg-white px-2 py-2 ring-1 ring-slate-200">
@@ -1073,17 +1079,42 @@ function ScoreDial({ score }: { score: number }) {
   );
 }
 
-function FocusNote({ total, target, hasDeviation }: { total: Nutrients; target: NutritionTarget; hasDeviation: boolean }) {
-  let text = "지금 흐름은 안정적입니다. 다음 식사도 같은 기준으로 기록하면 됩니다.";
+type MealContext = {
+  mealType: MealType;
+  total: Nutrients;
+  target: NutritionTarget;
+  ratio: number;
+  hasEntries: boolean;
+};
+
+function FocusNote({
+  context,
+  total,
+  target,
+  hasDeviation,
+}: {
+  context: MealContext;
+  total: Nutrients;
+  target: NutritionTarget;
+  hasDeviation: boolean;
+}) {
+  const mealProteinRemain = Math.max(0, context.target.protein - context.total.protein);
+  const dayProteinRemain = Math.max(0, target.protein - total.protein);
+  let text = context.hasEntries
+    ? `${context.mealType} 기준 단백질은 ${round(context.total.protein)}/${context.target.protein}g입니다. 하루 전체로는 ${round(dayProteinRemain)}g 남았습니다.`
+    : "아직 입력된 끼니가 없습니다. 첫 끼니를 기록하면 그 끼니 기준으로 바로 판단합니다.";
   let tone = "border-[#2DD4BF]/30 bg-[#ECFDF5] text-[#065F46]";
-  if (total.protein < target.protein * 0.75) text = "단백질이 아직 부족합니다. 다음 끼니에는 단백질 음식을 먼저 채우세요.";
-  if (total.calories > target.calories * 1.1) {
-    text = "칼로리가 목표를 넘었습니다. 남은 식사는 단백질과 채소 중심으로 가볍게 맞추세요.";
+
+  if (context.hasEntries && context.total.protein < context.target.protein * 0.85) {
+    text = `${context.mealType} 단백질이 ${round(mealProteinRemain)}g 정도 부족합니다. 이 끼니에 닭가슴살, 두유, 계란 중 하나를 조금 보강하면 좋습니다. 하루 전체로는 ${round(dayProteinRemain)}g 남았습니다.`;
     tone = "border-[#F59E0B]/30 bg-[#FFFBEB] text-[#92400E]";
   }
-  if (total.sodium > target.sodium) {
-    text = "나트륨이 목표를 넘었습니다. 가공식품과 국물 섭취를 줄이는 쪽이 좋습니다.";
-    tone = "border-[#E11D48]/30 bg-[#FFF1F2] text-[#9F1239]";
+  if (context.hasEntries && context.total.protein >= context.target.protein * 0.85) {
+    text = `${context.mealType} 단백질은 충분합니다. 다음 끼니에서는 하루 남은 단백질 ${round(dayProteinRemain)}g만 이어서 채우면 됩니다.`;
+  }
+  if (context.hasEntries && context.total.calories > context.target.calories * 1.25) {
+    text = `${context.mealType} 칼로리가 기준보다 높습니다. 다음 끼니는 단백질과 채소 위주로 가볍게 맞추세요.`;
+    tone = "border-[#F59E0B]/30 bg-[#FFFBEB] text-[#92400E]";
   }
   if (hasDeviation) {
     text = "이탈음식이 기록되었습니다. 오늘은 추가 제한보다 남은 기록을 정확히 남기는 것이 우선입니다.";
@@ -1098,36 +1129,63 @@ function FocusNote({ total, target, hasDeviation }: { total: Nutrients; target: 
   );
 }
 
-function ProgressRow({ name, value, target }: { name: NutrientKey; value: number; target: number }) {
-  const meta = nutrientLabels[name];
-  const percent = target ? Math.round((value / target) * 100) : 0;
-  const status = meta.limit ? (value <= target ? "적정" : "경고") : percent < 90 ? "부족" : percent <= 110 ? "적정" : "초과";
-  const remain = target - value;
-  const width = Math.min(100, percent);
-
+function MealAwareNutritionPanel({ context, total, target }: { context: MealContext; total: Nutrients; target: NutritionTarget }) {
   return (
     <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-base font-black">{meta.label}</p>
-          <p className="mt-1 text-sm font-bold text-[#7B8494]">
-            {round(value)} / {target}
-            {meta.unit} · {percent}%
+          <h2 className="text-xl font-black">현재 끼니 기준</h2>
+          <p className="mt-1 text-xs font-bold text-[#7B8494]">
+            {context.hasEntries ? `${context.mealType} 입력분을 먼저 판단하고, 하루 남은 양을 같이 봅니다` : "기록하면 끼니별 판단이 나타납니다"}
           </p>
         </div>
-        <StatusBadge status={status} />
+        <span className="rounded-md bg-[#F1F5F9] px-3 py-1.5 text-xs font-black text-[#566174]">하루 남은 양</span>
       </div>
-      <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#E5EAF1]">
-        <div
-          className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${width}%`, backgroundColor: meta.accent }}
-        />
+      <div className="mt-4 space-y-2">
+        {(["protein", "carbs", "fat", "calories"] as NutrientKey[]).map((key) => (
+          <MealProgressRow key={key} name={key} mealValue={context.total[key]} mealTarget={context.target[key]} dayValue={total[key]} dayTarget={target[key]} />
+        ))}
       </div>
-      <p className="mt-3 text-xs font-bold text-[#7B8494]">
-        {remain <= 0
-          ? `${meta.label} ${meta.limit ? `${round(Math.abs(remain))}${meta.unit} 초과` : "목표 달성"}`
-          : `${meta.label} ${round(remain)}${meta.unit} 남음`}
-      </p>
+    </div>
+  );
+}
+
+function MealProgressRow({
+  name,
+  mealValue,
+  mealTarget,
+  dayValue,
+  dayTarget,
+}: {
+  name: NutrientKey;
+  mealValue: number;
+  mealTarget: number;
+  dayValue: number;
+  dayTarget: number;
+}) {
+  const meta = nutrientLabels[name];
+  const mealPercent = mealTarget ? Math.round((mealValue / mealTarget) * 100) : 0;
+  const dayRemain = Math.max(0, dayTarget - dayValue);
+  const status = mealValue >= mealTarget * 0.85 ? "충분" : "보강";
+
+  return (
+    <div className="rounded-lg bg-[#F8FAFC] p-3 ring-1 ring-slate-100">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-black">{meta.label}</p>
+          <p className="mt-1 text-xs font-bold text-[#7B8494]">
+            끼니 {round(mealValue)} / {round(mealTarget)}
+            {meta.unit} · 하루 남음 {round(dayRemain)}
+            {meta.unit}
+          </p>
+        </div>
+        <span className={`rounded-md px-3 py-1.5 text-xs font-black ${status === "충분" ? "bg-[#ECFDF5] text-[#047857]" : "bg-[#FFFBEB] text-[#92400E]"}`}>
+          {status}
+        </span>
+      </div>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#E5EAF1]">
+        <div className="h-full rounded-full" style={{ width: `${Math.min(100, mealPercent)}%`, backgroundColor: meta.accent }} />
+      </div>
     </div>
   );
 }
@@ -1266,17 +1324,6 @@ function MetricPill({ label, value }: { label: string; value: string | number })
   );
 }
 
-function StatusBadge({ status }: { status: "적정" | "부족" | "초과" | "경고" }) {
-  const className =
-    status === "적정"
-      ? "bg-[#ECFDF5] text-[#047857]"
-      : status === "부족"
-        ? "bg-[#FFFBEB] text-[#92400E]"
-        : "bg-[#FFF1F2] text-[#BE123C]";
-
-  return <span className={`rounded-md px-3 py-1.5 text-xs font-black ${className}`}>{status}</span>;
-}
-
 function Mini({ label, value, unit = "" }: { label: string; value?: number; unit?: string }) {
   return (
     <div className="rounded-lg bg-[#F8FAFC] p-3">
@@ -1310,6 +1357,28 @@ function findPreviousWeight(logsByDate: Record<string, DailyLog>, selectedDate: 
     .filter((log) => log.date < selectedDate && log.weightKg > 0)
     .sort((a, b) => b.date.localeCompare(a.date))[0];
   return previous?.weightKg ?? fallback;
+}
+
+function getMealContext(log: DailyLog, foods: FoodItem[], target: NutritionTarget): MealContext {
+  const mealType = [...coreMeals].reverse().find((item) => log.entries.some((entry) => entry.mealType === item)) ?? "아침";
+  const mealEntries = log.entries.filter((entry) => entry.mealType === mealType);
+  const ratio = mealTargetRatios[mealType];
+  const mealTarget: NutritionTarget = {
+    calories: Math.round(target.calories * ratio),
+    carbs: Math.round(target.carbs * ratio),
+    protein: Math.round(target.protein * ratio),
+    fat: Math.round(target.fat * ratio),
+    sugar: Math.round(target.sugar * ratio),
+    sodium: Math.round(target.sodium * ratio),
+  };
+
+  return {
+    mealType,
+    total: calculateDailyNutrition(mealEntries, foods),
+    target: mealTarget,
+    ratio,
+    hasEntries: mealEntries.length > 0,
+  };
 }
 
 function summarizePeriod(dates: string[], logsByDate: Record<string, DailyLog>, foods: FoodItem[], currentDate: string): PeriodSummary {
